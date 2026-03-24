@@ -43,8 +43,8 @@ data/processed/
 *.jpg
 *.jpeg
 *.gif
-!assets/*.png
-!assets/*.jpg
+!assets/**/*.png
+!assets/**/*.jpg
 
 # Environment
 .env

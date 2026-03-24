@@ -45,6 +45,8 @@ import pygetwindow
 import mss
 import typing
 
+wirte_debug_img = True
+
 
 class RegionEditorDialog(QDialog):
     """区域编辑对话框"""
@@ -506,7 +508,8 @@ class OCRWorker(threading.Thread):
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
             # 保存调试图像
-            cv2.imwrite(f"screenshot/screenshot.png", img)
+            if wirte_debug_img:
+                cv2.imwrite(f"screenshot/screenshot.png", img)
 
             return img
 
@@ -544,15 +547,16 @@ class OCRWorker(threading.Thread):
         # 先裁剪牌池区域
         board_region = image[y : y + area_h, x : x + area_w]
 
-        cv2.imwrite(f"screenshot/board_region.png", board_region)
+        if wirte_debug_img:
+            cv2.imwrite(f"screenshot/board_region.png", board_region)
         # 尝试识别5张牌
         for i in range(5):
             card_x = int(area_w * i * 0.2)
             card_img = board_region[:, card_x : card_x + card_width]
-            cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
+            if wirte_debug_img:
+                cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
             card_text = self.ocr_image(card_img)
-            if card_text.strip():
-                result["board_cards"].append(card_text)
+            result["board_cards"].append(card_text)
 
         return result
 
@@ -580,27 +584,39 @@ class OCRWorker(threading.Thread):
             cropped = image[y : y + ph, x : x + pw]
 
         # 保存原始图像到本地
-        cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
+        if wirte_debug_img:
+            cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
         return self.ocr_image(cropped)
 
     def ocr_image(self, image):
         """OCR识别图像"""
         try:
-
+            h, w = image.shape[:2]
+            delta = 0.63
             # 预处理
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+            cropped = gray[0 : int(h * delta * 1.04), 0:w]
+            if wirte_debug_img:
+                cv2.imwrite(f"screenshot/cropped_number.png", cropped)
             # 二值化
-            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-            # OCR配置
-            custom_config = f'--oem {self.config["ocr"]["oem"]} --psm {self.config["ocr"]["psm"]} -c tessedit_char_whitelist=AJKQ0123456789'
+            _, binary = cv2.threshold(cropped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            # OCR配置 - 只识别点数字符
+            custom_config_number = f'--oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
 
             # 识别
-            text = pytesseract.image_to_string(binary, lang=self.config["ocr"]["language"], config=custom_config)
+            text = pytesseract.image_to_string(binary, config=custom_config_number).strip()
+
+            cropped = gray[int(h * delta * 0.98) : h, 0:w]
+            if wirte_debug_img:
+                cv2.imwrite(f"screenshot/cropped_suit.png", cropped)
+
+            # OCR配置 - 只识别花色字符
+            custom_config_suit = f'--oem {self.config["ocr"]["oem"]} --psm 8 -c tessedit_char_whitelist=♠♣♥♦'
+            suit = pytesseract.image_to_string(binary, config=custom_config_suit).strip()
 
             # 清理结果
-            return text.strip().replace("\n", " ")
+            return (suit, text)
 
         except Exception as e:
             self.signals.error_occurred.emit(f"OCR错误: {str(e)}")
@@ -961,15 +977,22 @@ class PokerOCRWindow(QMainWindow):
         # 更新手牌
         hand_cards = result.get("hand_cards", [])
         if len(hand_cards) >= 1:
-            self.card1_label.setText(hand_cards[0] if hand_cards[0] else "")
+            if hand_cards[0]:
+                self.card1_label.setText(f"{hand_cards[0][0]}{hand_cards[0][1]}")
+            else:
+                self.card1_label.setText("")
+
         if len(hand_cards) >= 2:
-            self.card2_label.setText(hand_cards[1] if hand_cards[1] else "")
+            if hand_cards[1]:
+                self.card2_label.setText(f"{hand_cards[1][0]}{hand_cards[1][1]}")
+            else:
+                self.card2_label.setText("")
 
         # 更新牌池
         board_cards = result.get("board_cards", [])
         for i, label in enumerate(self.board_labels):
             if i < len(board_cards) and board_cards[i]:
-                label.setText(board_cards[i])
+                label.setText(f"{board_cards[i][0]}{board_cards[i][1]}")
                 label.setStyleSheet(
                     """
                     QLabel {
@@ -998,8 +1021,8 @@ class PokerOCRWindow(QMainWindow):
                 )
 
         # 添加历史记录
-        hand_str = " | ".join([c if c else "??" for c in hand_cards])
-        board_str = " ".join([c if c else "??" for c in board_cards])
+        hand_str = " | ".join([f"{c[0]}{c[1]}" if c else "??" for c in hand_cards])
+        board_str = " ".join([f"{c[0]}{c[1]}" if c else "??" for c in board_cards])
         history_line = f'{result["timestamp"]} - 手牌: {hand_str} | 牌池: {board_str}'
         self.history_text.append(history_line)
 

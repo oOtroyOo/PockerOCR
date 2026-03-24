@@ -23,9 +23,7 @@ hand_cards:
       - 0.077
     r: 12
 ocr:
-  language: eng
   oem: 3
-  psm: 6
 scan_interval: 1000
 window_title:
   - Poker Fate
