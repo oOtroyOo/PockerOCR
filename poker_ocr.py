@@ -8,7 +8,6 @@ import sys
 import time
 import threading
 import cv2
-from cv2.typing import MatLike
 import numpy as np
 from PyQt5.QtWidgets import (
     QApplication,
@@ -22,29 +21,45 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QTextEdit,
     QGroupBox,
-    QGridLayout,
-    QFrame,
-    QFileDialog,
     QMessageBox,
     QDialog,
     QSlider,
     QDoubleSpinBox,
     QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QRectF, QPointF, QMetaObject
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, QPointF
 from PyQt5.QtGui import QPolygonF
-from PyQt5.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QBrush, QColor
+from PyQt5.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QColor
 import win32gui
-import win32ui
-import win32con
-from PIL import Image
 import pytesseract
 import yaml
 import subprocess
-import pywintypes
-import pygetwindow
 import mss
 import typing
+
+def load_stylesheet(app, qss_file_path="styles/style.qss"):
+    """从 QSS 文件加载样式表"""
+    try:
+        # 获取脚本所在目录的绝对路径
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(script_dir, qss_file_path)
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+        print(f"样式表已加载: {full_path}")
+    except FileNotFoundError:
+        print(f"样式文件不存在: {qss_file_path}")
+    except Exception as e:
+        print(f"加载样式失败: {e}")
+
+
+def refresh_style(widget):
+    """刷新控件样式，使属性选择器生效"""
+    style = widget.style()
+    if style:
+        style.unpolish(widget)
+        style.polish(widget)
+
 
 screenshot_debug_img = os.path.exists("screenshot")
 
@@ -664,7 +679,7 @@ class PokerOCRWindow(QMainWindow):
     def init_ui(self):
         """初始化UI"""
         self.setWindowTitle("扑克OCR识别系统")
-        self.setGeometry(100, 100, 900, 700)
+        self.setGeometry(100, 100, 720, 520)
 
         # 中心部件
         central_widget = QWidget()
@@ -672,25 +687,31 @@ class PokerOCRWindow(QMainWindow):
 
         # 主布局
         main_layout = QVBoxLayout()
+        main_layout.setSpacing(6)
+        main_layout.setContentsMargins(8, 8, 8, 8)
         central_widget.setLayout(main_layout)
 
         # 标题
-        title_label = QLabel("扑克OCR识别系统")
+        title_label = QLabel("♠️♥️扑克OCR♣️♦️")
+        title_label.setObjectName("titleLabel")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setFont(QFont("Arial", 20, QFont.Bold))
         main_layout.addWidget(title_label)
 
         # 分割布局
         content_layout = QHBoxLayout()
+        content_layout.setSpacing(8)
         main_layout.addLayout(content_layout)
 
         # 左侧控制面板
+        control_container = QWidget()
+        control_container.setMaximumWidth(190)
         control_panel = self.create_control_panel()
-        content_layout.addLayout(control_panel, 1)
+        control_container.setLayout(control_panel)
+        content_layout.addWidget(control_container, 0)
 
         # 右侧结果显示面板
         result_panel = self.create_result_panel()
-        content_layout.addLayout(result_panel, 2)
+        content_layout.addLayout(result_panel, 1)
 
         # 状态栏
         st_bar = self.statusBar()
@@ -706,7 +727,7 @@ class PokerOCRWindow(QMainWindow):
         window_layout = QVBoxLayout()
 
         self.window_combo = QComboBox()
-        self.window_combo.setMinimumHeight(40)
+        self.window_combo.setMinimumHeight(24)
         refresh_btn = QPushButton("刷新窗口列表")
         refresh_btn.clicked.connect(self.refresh_windows)
         window_layout.addWidget(refresh_btn)
@@ -732,16 +753,20 @@ class PokerOCRWindow(QMainWindow):
         # 编辑区域
         edit_group = QGroupBox("编辑区域")
         edit_layout = QHBoxLayout()
+        edit_layout.setSpacing(4)
 
         self.hand1_btn = QPushButton("手牌1")
+        self.hand1_btn.setProperty("editButton", "true")
         self.hand1_btn.clicked.connect(lambda: self.open_region_editor("card1", "手牌1"))
         edit_layout.addWidget(self.hand1_btn)
 
         self.hand2_btn = QPushButton("手牌2")
+        self.hand2_btn.setProperty("editButton", "true")
         self.hand2_btn.clicked.connect(lambda: self.open_region_editor("card2", "手牌2"))
         edit_layout.addWidget(self.hand2_btn)
 
         self.board_btn = QPushButton("卡池")
+        self.board_btn.setProperty("editButton", "true")
         self.board_btn.clicked.connect(lambda: self.open_region_editor("board", "卡池"))
         edit_layout.addWidget(self.board_btn)
 
@@ -751,74 +776,22 @@ class PokerOCRWindow(QMainWindow):
         # 控制按钮
         button_layout = QVBoxLayout()
 
-        self.start_btn = QPushButton("开始扫描")
-        self.start_btn.setMinimumHeight(50)
-        self.start_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """
-        )
+        self.start_btn = QPushButton("▶ 开始")
+        self.start_btn.setProperty("startButton", "true")
         self.start_btn.clicked.connect(self.start_scan)
         self.start_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
         button_layout.addWidget(self.start_btn)
 
-        self.stop_btn = QPushButton("停止扫描")
-        self.stop_btn.setMinimumHeight(50)
+        self.stop_btn = QPushButton("⏹ 停止")
+        self.stop_btn.setProperty("stopButton", "true")
         self.stop_btn.setEnabled(False)
-        self.stop_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """
-        )
         self.stop_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
-
         self.stop_btn.clicked.connect(self.stop_scan)
         button_layout.addWidget(self.stop_btn)
 
         # 训练按钮
-        self.train_btn = QPushButton("训练模型")
-        self.train_btn.setMinimumHeight(40)
-        self.train_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """
-        )
+        self.train_btn = QPushButton("🎯 训练")
+        self.train_btn.setProperty("trainButton", "true")
         self.train_btn.clicked.connect(self.run_training)
         button_layout.addWidget(self.train_btn)
 
@@ -829,21 +802,19 @@ class PokerOCRWindow(QMainWindow):
         info_layout = QVBoxLayout()
         info_text = QLabel(
             """
-注意：首次使用需要安装
+注意：首次使用需要安装<a href='https://github.com/tesseract-ocr/tesseract'>Tesseract OCR引擎</a>
         """
         )
         info_text.setWordWrap(True)
         info_layout.addWidget(info_text)
-        link_label = QLabel("<a href='https://github.com/tesseract-ocr/tesseract'>Tesseract OCR引擎</a>")
-        link_label.setOpenExternalLinks(True)
-        info_layout.addWidget(link_label)
+        info_text.setOpenExternalLinks(True)
         try:
             tesseract_version = subprocess.check_output(["tesseract", "--version"], encoding="utf8").strip().splitlines()[0]
             info_layout.addWidget(QLabel(f"Tesseract版本: {tesseract_version}"))
         except Exception as e:
             info_layout.addWidget(QLabel(f"并且添加到环境PATH，然后训练模型"))
             not_install = QLabel(f"Tesseract OCR引擎 未找到\n{e}")
-            not_install.setStyleSheet("color: red;")
+            not_install.setObjectName("errorLabel")
             info_layout.addWidget(not_install)
 
         info_layout.addWidget(
@@ -905,20 +876,9 @@ class PokerOCRWindow(QMainWindow):
     def create_card_label(self, title):
         """创建卡片标签"""
         label = QLabel("")
+        label.setObjectName("cardLabel")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setMinimumSize(10, 30)
-        label.setStyleSheet(
-            """
-            QLabel {
-                background-color: #f0f0f0;
-                border: 2px solid #ccc;
-                border-radius: 10px;
-                font-size: 18px;
-                font-weight: bold;
-                color: #333;
-            }
-        """
-        )
+        label.setMinimumSize(50, 65)
         return label
 
     def refresh_windows(self):
@@ -1091,46 +1051,37 @@ class PokerOCRWindow(QMainWindow):
         if len(hand_cards) >= 1:
             if hand_cards[0]:
                 self.card1_label.setText(f"{self.cardToText(hand_cards[0][0])}{self.cardToText(hand_cards[0][1])}")
+                self.card1_label.setProperty("handCardActive", "true")
+                self.card1_label.setProperty("handCardInactive", "")
             else:
                 self.card1_label.setText("")
+                self.card1_label.setProperty("handCardActive", "")
+                self.card1_label.setProperty("handCardInactive", "true")
+            refresh_style(self.card1_label)
 
         if len(hand_cards) >= 2:
             if hand_cards[1]:
                 self.card2_label.setText(f"{self.cardToText(hand_cards[1][0])}{self.cardToText(hand_cards[1][1])}")
+                self.card2_label.setProperty("handCardActive", "true")
+                self.card2_label.setProperty("handCardInactive", "")
             else:
                 self.card2_label.setText("")
+                self.card2_label.setProperty("handCardActive", "")
+                self.card2_label.setProperty("handCardInactive", "true")
+            refresh_style(self.card2_label)
 
         # 更新牌池
         board_cards = result.get("board_cards", [])
         for i, label in enumerate(self.board_labels):
             if i < len(board_cards) and board_cards[i]:
                 label.setText(f"{self.cardToText(board_cards[i][0])}{self.cardToText(board_cards[i][1])}")
-                label.setStyleSheet(
-                    """
-                    QLabel {
-                        background-color: #e3f2fd;
-                        border: 2px solid #2196F3;
-                        border-radius: 10px;
-                        font-size: 18px;
-                        font-weight: bold;
-                        color: #1565C0;
-                    }
-                """
-                )
+                label.setProperty("boardCardActive", "true")
+                label.setProperty("boardCardInactive", "")
             else:
                 label.setText("")
-                label.setStyleSheet(
-                    """
-                    QLabel {
-                        background-color: #f0f0f0;
-                        border: 2px solid #ccc;
-                        border-radius: 10px;
-                        font-size: 18px;
-                        font-weight: bold;
-                        color: #333;
-                    }
-                """
-                )
+                label.setProperty("boardCardActive", "")
+                label.setProperty("boardCardInactive", "true")
+            refresh_style(label)
 
         # 添加历史记录
         hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
@@ -1232,6 +1183,7 @@ class PokerOCRWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    load_stylesheet(app)  # 加载外部样式表
     window = PokerOCRWindow()
     window.show()
     sys.exit(app.exec_())

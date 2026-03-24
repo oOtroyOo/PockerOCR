@@ -1,0 +1,315 @@
+/*
+ * 扑克OCR应用程序样式表
+ * 赛博朋克紫黑主题 - 紧凑版
+ */
+
+/* ==================== 全局样式 ==================== */
+QMainWindow {
+    background-color: #0a0a0f;
+}
+
+QWidget {
+    background-color: #0a0a0f;
+    color: #e0e0e0;
+    font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+}
+
+/* ==================== 标题样式 ==================== */
+QLabel#titleLabel {
+    color: #ffffff;
+    padding: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #0f0f1a, stop:0.3 #1a1a2e, stop:0.5 #2d1b4e, stop:0.7 #1a1a2e, stop:1 #0f0f1a);
+    border: 1px solid #ff6b9d;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* ==================== 分组框 ==================== */
+QGroupBox {
+    background-color: #151520;
+    border: 1px solid #2d2d44;
+    border-radius: 8px;
+    margin-top: 6px;
+    padding-top: 6px;
+    font-weight: bold;
+    color: #f0f0f0;
+    font-size: 11px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
+    color: #ff6b9d;
+    font-size: 11px;
+}
+
+/* ==================== 普通按钮 ==================== */
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #6c5ce7, stop:1 #5f3dc4);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #a29bfe, stop:1 #6c5ce7);
+}
+
+QPushButton:pressed {
+    background: #4c1d95;
+}
+
+QPushButton:disabled {
+    background-color: #2d2d44;
+    color: #666680;
+}
+
+/* ==================== 开始按钮 ==================== */
+QPushButton[startButton="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #00d4aa, stop:1 #00a884);
+    color: #0a0a0f;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid #00f5c4;
+    padding: 6px;
+    min-height: 32px;
+}
+
+QPushButton[startButton="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5cedd0, stop:1 #00d4aa);
+    border-color: #5cedd0;
+}
+
+QPushButton[startButton="true"]:pressed {
+    background: #008f6e;
+}
+
+QPushButton[startButton="true"]:disabled {
+    background-color: #1a1a2e;
+    color: #4a4a60;
+    border-color: #2d2d44;
+}
+
+/* ==================== 停止按钮 ==================== */
+QPushButton[stopButton="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ff6b6b, stop:1 #ee5a5a);
+    color: #0a0a0f;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid #ff8585;
+    padding: 6px;
+    min-height: 32px;
+}
+
+QPushButton[stopButton="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ff8e8e, stop:1 #ff6b6b);
+    border-color: #ffb3b3;
+}
+
+QPushButton[stopButton="true"]:pressed {
+    background: #cc4444;
+}
+
+QPushButton[stopButton="true"]:disabled {
+    background-color: #1a1a2e;
+    color: #4a4a60;
+    border-color: #2d2d44;
+}
+
+/* ==================== 训练按钮 ==================== */
+QPushButton[trainButton="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ff6b9d, stop:1 #e91e63);
+    color: #0a0a0f;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid #ff8fab;
+    padding: 4px;
+    min-height: 28px;
+}
+
+QPushButton[trainButton="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ff8fab, stop:1 #ff6b9d);
+    border-color: #ffb3c6;
+}
+
+QPushButton[trainButton="true"]:pressed {
+    background: #c2185b;
+}
+
+QPushButton[trainButton="true"]:disabled {
+    background-color: #1a1a2e;
+    color: #4a4a60;
+    border-color: #2d2d44;
+}
+
+/* ==================== 编辑区域按钮 ==================== */
+QPushButton[editButton="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #4a5568, stop:1 #2d3748);
+    color: white;
+    border: 1px solid #5a6578;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 10px;
+    font-weight: bold;
+    min-width: 36px;
+}
+
+QPushButton[editButton="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5a6578, stop:1 #3d4758);
+    border-color: #ff6b9d;
+}
+
+QPushButton[editButton="true"]:pressed {
+    background: #1a202c;
+}
+
+/* ==================== 下拉框 ==================== */
+QComboBox {
+    background-color: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 6px;
+    padding: 4px;
+    color: #e0e0e0;
+    min-height: 20px;
+    font-size: 11px;
+}
+
+QComboBox:hover {
+    border-color: #ff6b9d;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid #ff6b9d;
+}
+
+/* ==================== 数字输入框 ==================== */
+QSpinBox, QDoubleSpinBox {
+    background-color: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 6px;
+    padding: 4px;
+    color: #e0e0e0;
+    font-size: 11px;
+}
+
+/* ==================== 标签 ==================== */
+QLabel {
+    color: #b0b0c0;
+    font-size: 11px;
+}
+
+/* ==================== 文本编辑框 ==================== */
+QTextEdit {
+    background-color: #0f0f1a;
+    border: 1px solid #2d2d44;
+    border-radius: 6px;
+    color: #00d4aa;
+    padding: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 10px;
+}
+
+QTextEdit:focus {
+    border-color: #ff6b9d;
+}
+
+/* ==================== 状态栏 ==================== */
+QStatusBar {
+    background-color: #151520;
+    color: #808090;
+    border-top: 1px solid #2d2d44;
+    font-size: 10px;
+}
+
+/* ==================== 卡片标签默认样式 ==================== */
+QLabel#cardLabel {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #1a1a2e, stop:1 #0f0f1a);
+    border: 1px solid #2d2d44;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #a0a0b0;
+    padding: 4px;
+}
+
+/* ==================== 手牌高亮样式（绿色） ==================== */
+QLabel[handCardActive="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #00d4aa, stop:1 #00a884);
+    border: 1px solid #5cedd0;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+    padding: 4px;
+}
+
+/* ==================== 手牌默认样式 ==================== */
+QLabel[handCardInactive="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #1a1a2e, stop:1 #0f0f1a);
+    border: 1px solid #2d2d44;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #a0a0b0;
+    padding: 4px;
+}
+
+/* ==================== 牌池高亮样式（粉色） ==================== */
+QLabel[boardCardActive="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ff6b9d, stop:1 #e91e63);
+    border: 1px solid #ff8fab;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+    padding: 4px;
+}
+
+/* ==================== 牌池默认样式 ==================== */
+QLabel[boardCardInactive="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #1a1a2e, stop:1 #0f0f1a);
+    border: 1px solid #2d2d44;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #a0a0b0;
+    padding: 4px;
+}
+
+/* ==================== 错误提示样式 ==================== */
+QLabel#errorLabel {
+    color: #ff6b6b;
+    font-weight: bold;
+}
