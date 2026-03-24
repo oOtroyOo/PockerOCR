@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QSlider,
     QDoubleSpinBox,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QRectF, QPointF, QMetaObject
 from PyQt5.QtGui import QPolygonF
@@ -99,24 +100,24 @@ class RegionEditorDialog(QDialog):
         control_layout = QHBoxLayout()
 
         # 旋转滑块
-        control_layout.addWidget(QLabel("旋转角度:"))
-        self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
-        self.rotation_slider.setRange(-45, 45)
-        self.rotation_slider.setValue(int(self.region["r"]))
-        self.rotation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.rotation_slider.setTickInterval(5)
-        self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
-        control_layout.addWidget(self.rotation_slider)
-
-        self.rotation_label = QLabel(f"{self.region['r']}°")
-        control_layout.addWidget(self.rotation_label)
+        if self.region.get("r", None):
+            control_layout.addWidget(QLabel("旋转角度:"))
+            self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
+            self.rotation_slider.setRange(-45, 45)
+            self.rotation_slider.setValue(int(self.region["r"]))
+            self.rotation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+            self.rotation_slider.setTickInterval(5)
+            self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
+            control_layout.addWidget(self.rotation_slider)
+            self.rotation_label = QLabel(f"{self.region['r']}°")
+            control_layout.addWidget(self.rotation_label)
 
         # 区域尺寸控制
         control_layout.addWidget(QLabel("宽度:"))
         self.width_spin = QDoubleSpinBox()
         self.width_spin.setRange(0.01, 0.99)
         self.width_spin.setSingleStep(0.01)
-        self.width_spin.setValue(self.region["w"])
+        self.width_spin.setValue(self.region.get("size", [])[0])
         self.width_spin.valueChanged.connect(self.on_region_changed)
         control_layout.addWidget(self.width_spin)
 
@@ -124,7 +125,7 @@ class RegionEditorDialog(QDialog):
         self.height_spin = QDoubleSpinBox()
         self.height_spin.setRange(0.01, 0.99)
         self.height_spin.setSingleStep(0.01)
-        self.height_spin.setValue(self.region["h"])
+        self.height_spin.setValue(self.region.get("size", [])[1])
         self.height_spin.valueChanged.connect(self.on_region_changed)
         control_layout.addWidget(self.height_spin)
 
@@ -172,8 +173,8 @@ class RegionEditorDialog(QDialog):
         x = int(self.region.get("pos", {})[0] * scaled_w)
         y = int(self.region.get("pos", {})[1] * scaled_h)
         rw = int(self.region.get("size", {})[0] * scaled_w)
-        rh = int(self.region.get("size", {})[0] * scaled_h)
-        rotation = self.region["r"]
+        rh = int(self.region.get("size", {})[1] * scaled_h)
+        rotation = self.region.get("r", 0)
 
         pen = QPen(QColor("#2196F3"), 2)
         pen.setStyle(Qt.PenStyle.DashLine)
@@ -685,11 +686,11 @@ class PokerOCRWindow(QMainWindow):
 
         # 左侧控制面板
         control_panel = self.create_control_panel()
-        content_layout.addWidget(control_panel, 1)
+        content_layout.addLayout(control_panel, 1)
 
         # 右侧结果显示面板
         result_panel = self.create_result_panel()
-        content_layout.addWidget(result_panel, 2)
+        content_layout.addLayout(result_panel, 2)
 
         # 状态栏
         st_bar = self.statusBar()
@@ -698,7 +699,6 @@ class PokerOCRWindow(QMainWindow):
 
     def create_control_panel(self):
         """创建控制面板"""
-        panel = QGroupBox("控制面板")
         layout = QVBoxLayout()
 
         # 窗口选择
@@ -841,31 +841,27 @@ class PokerOCRWindow(QMainWindow):
             tesseract_version = subprocess.check_output(["tesseract", "--version"], encoding="utf8").strip().splitlines()[0]
             info_layout.addWidget(QLabel(f"Tesseract版本: {tesseract_version}"))
         except Exception as e:
-            info_layout.addWidget(QLabel(f"并且添加到环境PATH"))
+            info_layout.addWidget(QLabel(f"并且添加到环境PATH，然后训练模型"))
             not_install = QLabel(f"Tesseract OCR引擎 未找到\n{e}")
             not_install.setStyleSheet("color: red;")
             info_layout.addWidget(not_install)
 
-        info_layout.addWidget(QLabel("""
+        info_layout.addWidget(
+            QLabel(
+                """
 可根据 assets/images 中的资源训练模型，以提高精确度
-        """))
+        """
+            )
+        )
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
 
         layout.addStretch()
-        panel.setLayout(layout)
-        return panel
+        return layout
 
     def create_result_panel(self):
         """创建结果显示面板"""
-        panel = QGroupBox("识别结果")
         layout = QVBoxLayout()
-
-        # 时间戳
-        self.timestamp_label = QLabel("时间: --:--:--")
-        self.timestamp_label.setFont(QFont("Arial", 12, QFont.Bold))
-        self.timestamp_label.setStyleSheet("color: #666;")
-        layout.addWidget(self.timestamp_label)
 
         # 牌池区域
         board_group = QGroupBox("牌池 (Board Cards)")
@@ -893,25 +889,24 @@ class PokerOCRWindow(QMainWindow):
         layout.addWidget(hand_group)
 
         # 历史记录
-        history_group = QGroupBox("历史记录")
+        history_group = QGroupBox("程序输出")
         history_layout = QVBoxLayout()
 
         self.history_text = QTextEdit()
         self.history_text.setReadOnly(True)
-        self.history_text.setMaximumHeight(150)
+        self.history_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         history_layout.addWidget(self.history_text)
 
         history_group.setLayout(history_layout)
         layout.addWidget(history_group)
 
-        panel.setLayout(layout)
-        return panel
+        return layout
 
     def create_card_label(self, title):
         """创建卡片标签"""
         label = QLabel("")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setMinimumSize(80, 120)
+        label.setMinimumSize(10, 30)
         label.setStyleSheet(
             """
             QLabel {
@@ -1090,8 +1085,6 @@ class PokerOCRWindow(QMainWindow):
 
     def update_result(self, result):
         """更新识别结果"""
-        # 更新时间戳
-        self.timestamp_label.setText(f'时间: {result["timestamp"]}')
 
         # 更新手牌
         hand_cards = result.get("hand_cards", [])
