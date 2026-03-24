@@ -1,11 +1,9 @@
 board_cards:
-  area:
   - 0.369
   - 0.449
   - 0.24
   - 0.06
   - 0
-  card_width: 0.05
 hand_cards:
   card1:
   - 0.537

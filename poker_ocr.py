@@ -524,15 +524,14 @@ class OCRWorker(threading.Thread):
         result["hand_cards"] = [card1, card2]
 
         # 识别牌池（支持5张牌）
-        board_area = self.config["board_cards"]["area"]
-        card_width_ratio = self.config["board_cards"]["card_width"]
+        board_area = self.config["board_cards"]
 
         x, y, area_w, area_h, rotation = board_area
         x = int(x * w)
         y = int(y * h)
         area_w = int(area_w * w)
         area_h = int(area_h * h)
-        card_width = int(card_width_ratio * w)
+        card_width = int(area_w * 0.2)
 
         # 先裁剪牌池区域
         board_region = image[y : y + area_h, x : x + area_w]
@@ -564,11 +563,11 @@ class OCRWorker(threading.Thread):
         # 尝试识别5张牌
         for i in range(5):
             card_x = i * (card_width + 5)
-            if card_x + card_width <= area_w:
-                card_img = board_img[:, card_x : card_x + card_width]
-                card_text = self.ocr_image(card_img)
-                if card_text.strip():
-                    result["board_cards"].append(card_text)
+            card_img = board_img[:, card_x : card_x + card_width]
+            cv2.imwrite(f"screenshot/card_img_{i+1}.png", card_img)
+            card_text = self.ocr_image(card_img)
+            if card_text.strip():
+                result["board_cards"].append(card_text)
 
         return result
 
@@ -846,18 +845,6 @@ class PokerOCRWindow(QMainWindow):
         self.timestamp_label.setStyleSheet("color: #666;")
         layout.addWidget(self.timestamp_label)
 
-        # 手牌区域
-        hand_group = QGroupBox("手牌 (Hole Cards)")
-        hand_layout = QHBoxLayout()
-
-        self.card1_label = self.create_card_label("手牌 1")
-        self.card2_label = self.create_card_label("手牌 2")
-
-        hand_layout.addWidget(self.card1_label)
-        hand_layout.addWidget(self.card2_label)
-        hand_group.setLayout(hand_layout)
-        layout.addWidget(hand_group)
-
         # 牌池区域
         board_group = QGroupBox("牌池 (Board Cards)")
         board_layout = QHBoxLayout()
@@ -870,6 +857,18 @@ class PokerOCRWindow(QMainWindow):
 
         board_group.setLayout(board_layout)
         layout.addWidget(board_group)
+
+        # 手牌区域
+        hand_group = QGroupBox("手牌 (Hole Cards)")
+        hand_layout = QHBoxLayout()
+
+        self.card1_label = self.create_card_label("手牌 1")
+        self.card2_label = self.create_card_label("手牌 2")
+
+        hand_layout.addWidget(self.card1_label)
+        hand_layout.addWidget(self.card2_label)
+        hand_group.setLayout(hand_layout)
+        layout.addWidget(hand_group)
 
         # 历史记录
         history_group = QGroupBox("历史记录")
