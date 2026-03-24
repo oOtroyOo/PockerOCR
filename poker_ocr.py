@@ -45,7 +45,7 @@ import pygetwindow
 import mss
 import typing
 
-wirte_debug_img = True
+screenshot_debug_img = os.path.exists('screenshot')
 
 
 class RegionEditorDialog(QDialog):
@@ -508,7 +508,7 @@ class OCRWorker(threading.Thread):
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
             # 保存调试图像
-            if wirte_debug_img:
+            if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/screenshot.png", img)
 
             return img
@@ -547,13 +547,13 @@ class OCRWorker(threading.Thread):
         # 先裁剪牌池区域
         board_region = image[y : y + area_h, x : x + area_w]
 
-        if wirte_debug_img:
+        if screenshot_debug_img:
             cv2.imwrite(f"screenshot/board_region.png", board_region)
         # 尝试识别5张牌
         for i in range(5):
             card_x = int(area_w * i * 0.2)
             card_img = board_region[:, card_x : card_x + card_width]
-            if wirte_debug_img:
+            if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
             card_text = self.ocr_image(card_img)
             result["board_cards"].append(card_text)
@@ -584,7 +584,7 @@ class OCRWorker(threading.Thread):
             cropped = image[y : y + ph, x : x + pw]
 
         # 保存原始图像到本地
-        if wirte_debug_img:
+        if screenshot_debug_img:
             cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
         return self.ocr_image(cropped)
 
@@ -597,7 +597,7 @@ class OCRWorker(threading.Thread):
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
             cropped = gray[0 : int(h * delta * 1.04), 0:w]
-            if wirte_debug_img:
+            if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/cropped_number.png", cropped)
             # 二值化
             _, binary = cv2.threshold(cropped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -608,7 +608,7 @@ class OCRWorker(threading.Thread):
             text = pytesseract.image_to_string(binary, config=custom_config_number).strip()
 
             cropped = gray[int(h * delta * 0.98) : h, 0:w]
-            if wirte_debug_img:
+            if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/cropped_suit.png", cropped)
 
             # OCR配置 - 只识别花色字符

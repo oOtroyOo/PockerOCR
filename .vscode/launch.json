@@ -11,6 +11,14 @@
             "program": "poker_ocr.py",
             "console": "integratedTerminal",
             "args": ""
+        },
+        {
+            "name": "Python 训练模型",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "trainer.py",
+            "console": "integratedTerminal",
+            "args": ""
         }
     ]
 }
