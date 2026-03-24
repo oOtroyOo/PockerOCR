@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QSlider,
     QDoubleSpinBox,
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QRectF, QPointF
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QRectF, QPointF, QMetaObject
 from PyQt5.QtGui import QPolygonF
 from PyQt5.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QBrush, QColor
 import win32gui
@@ -45,7 +45,7 @@ import pygetwindow
 import mss
 import typing
 
-screenshot_debug_img = os.path.exists('screenshot')
+screenshot_debug_img = os.path.exists("screenshot")
 
 
 class RegionEditorDialog(QDialog):
@@ -589,34 +589,43 @@ class OCRWorker(threading.Thread):
         return self.ocr_image(cropped)
 
     def ocr_image(self, image):
-        """OCR识别图像"""
+        """OCR识别图像，使用本地训练的 poker 模型"""
         try:
             h, w = image.shape[:2]
-            delta = 0.63
+            delta = 0.65
+
+            # 获取训练数据目录的绝对路径
+            tessdata_dir = os.path.abspath("assets/traineddata")
+
             # 预处理
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-            cropped = gray[0 : int(h * delta * 1.04), 0:w]
-            if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/cropped_number.png", cropped)
+            # 识别点数
+            cropped_num = gray[0 : int(h * delta), 0:w]
+
             # 二值化
-            _, binary = cv2.threshold(cropped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            # OCR配置 - 只识别点数字符
-            custom_config_number = f'--oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
+            _, binary = cv2.threshold(cropped_num, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            # 识别
-            text = pytesseract.image_to_string(binary, config=custom_config_number).strip()
+            # OCR配置 - 使用本地 poker 模型识别点数
+            custom_config_number = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
 
-            cropped = gray[int(h * delta * 0.98) : h, 0:w]
-            if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/cropped_suit.png", cropped)
+            text = pytesseract.image_to_string(binary, lang="poker", config=custom_config_number).strip()
 
-            # OCR配置 - 只识别花色字符
-            custom_config_suit = f'--oem {self.config["ocr"]["oem"]} --psm 8 -c tessedit_char_whitelist=♠♣♥♦'
-            suit = pytesseract.image_to_string(binary, config=custom_config_suit).strip()
+            # 识别花色
+            cropped_suit = gray[int(h * delta) : h, 0:w]
+            
 
-            # 清理结果
-            return (suit, text)
+            _, binary = cv2.threshold(cropped_suit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            # OCR配置 - 使用本地 poker 模型识别花色
+            custom_config_suit = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 10 -c tessedit_char_whitelist=SHCD'
+            suit = pytesseract.image_to_string(binary, lang="poker", config=custom_config_suit).strip()
+            if len(text) == 1 and len(suit) == 1:
+                return (suit, text)
+            else:
+                if screenshot_debug_img:
+                    cv2.imwrite(f"screenshot/cropped_num.png", cropped_num)
+                    cv2.imwrite(f"screenshot/cropped_suit.png", cropped_suit)
+            return ("", "")
 
         except Exception as e:
             self.signals.error_occurred.emit(f"OCR错误: {str(e)}")
@@ -630,9 +639,14 @@ class OCRWorker(threading.Thread):
 class PokerOCRWindow(QMainWindow):
     """主窗口"""
 
+    # 定义信号
+    training_finished = pyqtSignal(bool, str)
+
     def __init__(self):
         super().__init__()
         self.config = self.load_config()
+        # 连接训练完成信号
+        self.training_finished.connect(self.on_training_finished)
         self.worker = None
         self.window_list = []
         self.current_hwnd = None
@@ -759,6 +773,7 @@ class PokerOCRWindow(QMainWindow):
         """
         )
         self.start_btn.clicked.connect(self.start_scan)
+        self.start_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
         button_layout.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton("停止扫描")
@@ -781,8 +796,33 @@ class PokerOCRWindow(QMainWindow):
             }
         """
         )
+        self.stop_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
+
         self.stop_btn.clicked.connect(self.stop_scan)
         button_layout.addWidget(self.stop_btn)
+
+        # 训练按钮
+        self.train_btn = QPushButton("训练模型")
+        self.train_btn.setMinimumHeight(40)
+        self.train_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """
+        )
+        self.train_btn.clicked.connect(self.run_training)
+        button_layout.addWidget(self.train_btn)
 
         layout.addLayout(button_layout)
 
@@ -899,16 +939,17 @@ class PokerOCRWindow(QMainWindow):
             if win32gui.IsWindowVisible(hwnd):
                 title = win32gui.GetWindowText(hwnd)
                 if title:
-                    self.window_list.append((hwnd, title))
+                    className = win32gui.GetClassName(hwnd)
+                    self.window_list.append((hwnd, title, className))
 
         win32gui.EnumWindows(enum_windows, None)
 
         # 排序并添加到下拉框
         self.window_list.sort(key=lambda x: x[1])
-        first = self.window_combo.currentIndex() < 0
-        for hwnd, title in self.window_list:
+        isOpen = self.window_combo.currentIndex() < 0
+        for hwnd, title, className in self.window_list:
             self.window_combo.addItem(title, hwnd)
-            if first and title in self.config["window_title"]:
+            if isOpen and (title in self.config["window_title"]) and className == "UnityWndClass":
                 self.window_combo.setCurrentIndex(self.window_combo.count() - 1)
 
         st_bar = self.statusBar()
@@ -969,6 +1010,88 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage("扫描已停止")
 
+    def run_training(self):
+        """运行Tesseract模型训练"""
+        from trainer import train_tesseract_model, create_config_files
+        import shutil
+
+        # 确认对话框
+        reply = QMessageBox.question(
+            self, "确认训练", "将根据 assets/images 中的图像训练 Tesseract 模型。\n训练可能需要几分钟，是否继续?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # 禁用训练按钮
+        self.train_btn.setEnabled(False)
+        self.train_btn.setText("训练中...")
+
+        st_bar = self.statusBar()
+        if st_bar:
+            st_bar.showMessage("开始训练模型...")
+
+        # 在后台线程运行训练
+        def training_thread():
+            success = False
+            message = ""
+            try:
+                create_config_files()
+                success = train_tesseract_model()
+
+                # 清理临时训练目录
+                training_dir = "assets/training"
+                if os.path.exists(training_dir):
+                    shutil.rmtree(training_dir)
+
+                message = "训练成功" if success else "训练失败"
+            except Exception as e:
+                success = False
+                message = f"训练出错: {str(e)}"
+
+            # 发射信号到主线程更新UI
+            self.training_finished.emit(success, message)
+
+        thread = threading.Thread(target=training_thread, daemon=True)
+        thread.start()
+
+    def on_training_finished(self, success: bool, message: str):
+        """训练完成的回调"""
+        # 恢复按钮状态
+        self.train_btn.setEnabled(True)
+        self.train_btn.setText("训练模型")
+
+        # 更新日志
+        self.history_text.append("\n" + "=" * 60)
+        if success:
+            self.history_text.append("训练成功!")
+            self.history_text.append("模型文件: assets/traineddata/poker.traineddata")
+            self.history_text.append("请重启应用程序以使用新模型")
+            QMessageBox.information(self, "训练完成", "模型训练成功!\n请重启应用程序以使用新模型。")
+            self.start_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
+            self.stop_btn.setVisible(os.path.exists("assets/traineddata/poker.traineddata"))
+
+        else:
+            self.history_text.append(message)
+            QMessageBox.warning(self, "训练失败", message)
+
+        # 更新状态栏
+        st_bar = self.statusBar()
+        if st_bar:
+            st_bar.showMessage(message)
+
+    def cardToText(self, c: str):
+        if c == "S":
+            return "♠️"
+        elif c == "H":
+            return "♥️"
+        elif c == "C":
+            return "♣️"
+        elif c == "D":
+            return "♦️"
+        elif c == "T":
+            return "10"
+        return c
+
     def update_result(self, result):
         """更新识别结果"""
         # 更新时间戳
@@ -978,13 +1101,13 @@ class PokerOCRWindow(QMainWindow):
         hand_cards = result.get("hand_cards", [])
         if len(hand_cards) >= 1:
             if hand_cards[0]:
-                self.card1_label.setText(f"{hand_cards[0][0]}{hand_cards[0][1]}")
+                self.card1_label.setText(f"{self.cardToText(hand_cards[0][0])}{self.cardToText(hand_cards[0][1])}")
             else:
                 self.card1_label.setText("")
 
         if len(hand_cards) >= 2:
             if hand_cards[1]:
-                self.card2_label.setText(f"{hand_cards[1][0]}{hand_cards[1][1]}")
+                self.card2_label.setText(f"{self.cardToText(hand_cards[1][0])}{self.cardToText(hand_cards[1][1])}")
             else:
                 self.card2_label.setText("")
 
@@ -992,7 +1115,7 @@ class PokerOCRWindow(QMainWindow):
         board_cards = result.get("board_cards", [])
         for i, label in enumerate(self.board_labels):
             if i < len(board_cards) and board_cards[i]:
-                label.setText(f"{board_cards[i][0]}{board_cards[i][1]}")
+                label.setText(f"{self.cardToText(board_cards[i][0])}{self.cardToText(board_cards[i][1])}")
                 label.setStyleSheet(
                     """
                     QLabel {
@@ -1021,10 +1144,11 @@ class PokerOCRWindow(QMainWindow):
                 )
 
         # 添加历史记录
-        hand_str = " | ".join([f"{c[0]}{c[1]}" if c else "??" for c in hand_cards])
-        board_str = " ".join([f"{c[0]}{c[1]}" if c else "??" for c in board_cards])
+        hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
+        board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
         history_line = f'{result["timestamp"]} - 手牌: {hand_str} | 牌池: {board_str}'
-        self.history_text.append(history_line)
+        if False:
+            self.history_text.append(history_line)
 
         # 限制历史记录数量
         scroll_bar = self.history_text.verticalScrollBar()

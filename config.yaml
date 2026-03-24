@@ -12,18 +12,18 @@ hand_cards:
       - 0.693
     size:
       - 0.028
-      - 0.077
+      - 0.074
     r: -4
   card2:
     pos:
       - 0.587
-      - 0.687
+      - 0.688
     size:
       - 0.028
-      - 0.077
-    r: 12
+      - 0.074
+    r: 10.3
 ocr:
-  oem: 3
-scan_interval: 1000
+  oem: 2
+scan_interval: 200
 window_title:
   - Poker Fate
