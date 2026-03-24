@@ -64,15 +64,16 @@ class RegionEditorDialog(QDialog):
         self.init_ui()
         self.update_preview()
 
-    def get_current_region(self):
+    def get_current_region(self) -> dict[str, typing.Any]:
         """获取当前区域配置"""
+        # 格式: {"pos": [x, y], "size": [w, h], "r": rotation}
         if self.region_key == "card1":
-            return self.current_config.get("hand_cards", {}).get("card1", [0.1, 0.8, 0.1, 0.15, 0])
+            return self.current_config.get("hand_cards", {}).get("card1", {})
         elif self.region_key == "card2":
-            return self.current_config.get("hand_cards", {}).get("card2", [0.25, 0.8, 0.1, 0.15, 0])
+            return self.current_config.get("hand_cards", {}).get("card2", {})
         elif self.region_key == "board":
-            return self.current_config.get("board_cards", {}).get("area", [0.1, 0.5, 0.8, 0.2, 0])
-        return [0.1, 0.1, 0.1, 0.1, 0]
+            return self.current_config.get("board_cards", {})
+        return {}
 
     def init_ui(self):
         """初始化UI"""
@@ -99,13 +100,13 @@ class RegionEditorDialog(QDialog):
         control_layout.addWidget(QLabel("旋转角度:"))
         self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
         self.rotation_slider.setRange(-45, 45)
-        self.rotation_slider.setValue(int(self.region[4]))
+        self.rotation_slider.setValue(int(self.region["r"]))
         self.rotation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.rotation_slider.setTickInterval(5)
         self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
         control_layout.addWidget(self.rotation_slider)
 
-        self.rotation_label = QLabel(f"{self.region[4]}°")
+        self.rotation_label = QLabel(f"{self.region['r']}°")
         control_layout.addWidget(self.rotation_label)
 
         # 区域尺寸控制
@@ -113,7 +114,7 @@ class RegionEditorDialog(QDialog):
         self.width_spin = QDoubleSpinBox()
         self.width_spin.setRange(0.01, 0.99)
         self.width_spin.setSingleStep(0.01)
-        self.width_spin.setValue(self.region[2])
+        self.width_spin.setValue(self.region["w"])
         self.width_spin.valueChanged.connect(self.on_region_changed)
         control_layout.addWidget(self.width_spin)
 
@@ -121,7 +122,7 @@ class RegionEditorDialog(QDialog):
         self.height_spin = QDoubleSpinBox()
         self.height_spin.setRange(0.01, 0.99)
         self.height_spin.setSingleStep(0.01)
-        self.height_spin.setValue(self.region[3])
+        self.height_spin.setValue(self.region["h"])
         self.height_spin.valueChanged.connect(self.on_region_changed)
         control_layout.addWidget(self.height_spin)
 
@@ -166,11 +167,11 @@ class RegionEditorDialog(QDialog):
         painter = QPainter(scaled_pixmap)
 
         # 绘制虚线框（已有区域，带旋转）
-        x = int(self.region[0] * scaled_w)
-        y = int(self.region[1] * scaled_h)
-        rw = int(self.region[2] * scaled_w)
-        rh = int(self.region[3] * scaled_h)
-        rotation = self.region[4]
+        x = int(self.region.get("pos", {})[0] * scaled_w)
+        y = int(self.region.get("pos", {})[1] * scaled_h)
+        rw = int(self.region.get("size", {})[0] * scaled_w)
+        rh = int(self.region.get("size", {})[0] * scaled_h)
+        rotation = self.region["r"]
 
         pen = QPen(QColor("#2196F3"), 2)
         pen.setStyle(Qt.PenStyle.DashLine)
@@ -325,7 +326,10 @@ class RegionEditorDialog(QDialog):
             self.user_region = (x, y, region_w_percent, region_h_percent)
 
             # 更新配置区域
-            self.region = [x, y, region_w_percent, region_h_percent, self.region[4]]
+            self.region["x"] = x
+            self.region["y"] = y
+            self.region["w"] = region_w_percent
+            self.region["h"] = region_h_percent
             self.width_spin.setValue(region_w_percent)
             self.height_spin.setValue(region_h_percent)
 
@@ -334,42 +338,44 @@ class RegionEditorDialog(QDialog):
     def on_rotation_changed(self):
         """旋转角度改变"""
         rotation = self.rotation_slider.value()
-        self.region[4] = rotation
+        self.region["r"] = rotation
         self.rotation_label.setText(f"{rotation}°")
         self.update_preview()
 
     def on_region_changed(self):
         """区域尺寸改变"""
-        self.region[2] = self.width_spin.value()
-        self.region[3] = self.height_spin.value()
+        self.region["w"] = self.width_spin.value()
+        self.region["h"] = self.height_spin.value()
         self.update_preview()
 
     def reset_region(self):
         """重置区域"""
         self.region = self.get_current_region()
-        self.rotation_slider.setValue(int(self.region[4]))
-        self.width_spin.setValue(self.region[2])
-        self.height_spin.setValue(self.region[3])
+        self.rotation_slider.setValue(int(self.region["r"]))
+        self.width_spin.setValue(self.region["w"])
+        self.height_spin.setValue(self.region["h"])
         if hasattr(self, "user_region"):
             del self.user_region
         self.update_preview()
 
     def save_region(self):
         """保存区域"""
-        for i in range(len(self.region)):
-            self.region[i] = round(self.region[i], 3)
+        # 转换为配置文件格式 {"pos": [x, y], "size": [w, h], "r": rotation}
+        region_dict = {
+            "pos": [round(self.region["x"], 2), round(self.region["y"], 2)],
+            "size": [round(self.region["w"], 2), round(self.region["h"], 2)],
+            "r": round(self.region["r"], 2),
+        }
         if self.region_key == "card1":
             if "hand_cards" not in self.current_config:
                 self.current_config["hand_cards"] = {}
-            self.current_config["hand_cards"]["card1"] = self.region
+            self.current_config["hand_cards"]["card1"] = region_dict
         elif self.region_key == "card2":
             if "hand_cards" not in self.current_config:
                 self.current_config["hand_cards"] = {}
-            self.current_config["hand_cards"]["card2"] = self.region
+            self.current_config["hand_cards"]["card2"] = region_dict
         elif self.region_key == "board":
-            if "board_cards" not in self.current_config:
-                self.current_config["board_cards"] = {}
-            self.current_config["board_cards"]["area"] = self.region
+            self.current_config["board_cards"] = region_dict
 
         self.accept()
 
@@ -500,7 +506,7 @@ class OCRWorker(threading.Thread):
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
             # 保存调试图像
-            cv2.imwrite(f"screenshot/cv.png", img)
+            cv2.imwrite(f"screenshot/screenshot.png", img)
 
             return img
 
@@ -524,47 +530,26 @@ class OCRWorker(threading.Thread):
         result["hand_cards"] = [card1, card2]
 
         # 识别牌池（支持5张牌）
-        board_area = self.config["board_cards"]
+        board_cards = self.config["board_cards"]
 
-        x, y, area_w, area_h, rotation = board_area
-        x = int(x * w)
-        y = int(y * h)
-        area_w = int(area_w * w)
-        area_h = int(area_h * h)
-        card_width = int(area_w * 0.2)
+        pos_list = board_cards.get("pos", [0, 0])
+        size_list = board_cards.get("size", [0, 0])
+
+        x = int(pos_list[0] * w)
+        y = int(pos_list[1] * h)
+        area_w = int(size_list[0] * w)
+        area_h = int(size_list[1] * h)
+        card_width = int(size_list[0] * 0.2 * 0.4 * w)
 
         # 先裁剪牌池区域
         board_region = image[y : y + area_h, x : x + area_w]
 
-        # 如果有旋转，旋转整个牌池区域
-        if rotation != 0:
-            center = (area_w // 2, area_h // 2)
-            M = cv2.getRotationMatrix2D(center, rotation, 1.0)
-
-            # 计算旋转后的图像尺寸
-            abs_cos = abs(M[0, 0])
-            abs_sin = abs(M[0, 1])
-            new_w = int(area_h * abs_sin + area_w * abs_cos)
-            new_h = int(area_h * abs_cos + area_w * abs_sin)
-
-            # 调整旋转矩阵
-            M[0, 2] += (new_w - area_w) / 2
-            M[1, 2] += (new_h - area_h) / 2
-
-            # 旋转图像
-            board_img = cv2.warpAffine(board_region, M, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-
-            # 调整牌池宽度以适应旋转后的图像
-            area_w = new_w
-            area_h = new_h
-        else:
-            board_img = board_region
-        cv2.imwrite(f"screenshot/board_img.png", board_img)
+        cv2.imwrite(f"screenshot/board_region.png", board_region)
         # 尝试识别5张牌
         for i in range(5):
-            card_x = i * (card_width + 5)
-            card_img = board_img[:, card_x : card_x + card_width]
-            cv2.imwrite(f"screenshot/card_img_{i+1}.png", card_img)
+            card_x = int(area_w * i * 0.2)
+            card_img = board_region[:, card_x : card_x + card_width]
+            cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
             card_text = self.ocr_image(card_img)
             if card_text.strip():
                 result["board_cards"].append(card_text)
@@ -573,39 +558,29 @@ class OCRWorker(threading.Thread):
 
     def crop_and_ocr(self, image, pos, w, h):
         """裁剪并OCR识别"""
-        x, y, pw, ph, rotation = pos
-        x = int(x * w)
-        y = int(y * h)
-        pw = int(pw * w)
-        ph = int(ph * h)
+        # pos 格式: {"pos": [x, y], "size": [w, h], "r": rotation}
+        pos_list = pos.get("pos", [0, 0])
+        size_list = pos.get("size", [0, 0])
+        rotation = pos.get("r", 0)
 
-        # 先裁剪出区域
-        region = image[y : y + ph, x : x + pw]
+        x = int(pos_list[0] * w)
+        y = int(pos_list[1] * h)
+        pw = int(size_list[0] * w)
+        ph = int(size_list[1] * h)
 
         # 如果有旋转，先旋转再裁剪
         if rotation != 0:
             # 创建旋转矩阵
-            center = (pw // 2, ph // 2)
+            center = (x + pw // 2, y + ph // 2)
             M = cv2.getRotationMatrix2D(center, rotation, 1.0)
-
-            # 计算旋转后的图像尺寸
-            abs_cos = abs(M[0, 0])
-            abs_sin = abs(M[0, 1])
-            new_w = int(ph * abs_sin + pw * abs_cos)
-            new_h = int(ph * abs_cos + pw * abs_sin)
-
-            # 调整旋转矩阵以包含完整图像
-            M[0, 2] += (new_w - pw) / 2
-            M[1, 2] += (new_h - ph) / 2
-
             # 旋转图像
-            rotated = cv2.warpAffine(region, M, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            cropped = rotated
+            rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            cropped = rotated[y : y + ph, x : x + pw]
         else:
-            cropped = region
+            cropped = image[y : y + ph, x : x + pw]
 
         # 保存原始图像到本地
-        cv2.imwrite(f"screenshot/capture_{pos}.png", cropped)
+        cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
         return self.ocr_image(cropped)
 
     def ocr_image(self, image):
@@ -619,7 +594,7 @@ class OCRWorker(threading.Thread):
             _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
             # OCR配置
-            custom_config = f'--oem {self.config["ocr"]["oem"]} --psm {self.config["ocr"]["psm"]} -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            custom_config = f'--oem {self.config["ocr"]["oem"]} --psm {self.config["ocr"]["psm"]} -c tessedit_char_whitelist=AJKQ0123456789'
 
             # 识别
             text = pytesseract.image_to_string(binary, lang=self.config["ocr"]["language"], config=custom_config)
@@ -654,12 +629,7 @@ class PokerOCRWindow(QMainWindow):
                 return yaml.safe_load(f)
         except FileNotFoundError:
             # 返回默认配置
-            return {
-                "scan_interval": 1000,
-                "ocr": {"language": "eng", "oem": 3, "psm": 6},
-                "hand_cards": {"card1": [0.1, 0.8, 0.1, 0.15], "card2": [0.25, 0.8, 0.1, 0.15]},
-                "board_cards": {"area": [0.1, 0.5, 0.8, 0.2], "card_width": 0.15},
-            }
+            raise
 
     def init_ui(self):
         """初始化UI"""

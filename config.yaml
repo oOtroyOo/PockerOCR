@@ -1,26 +1,31 @@
 board_cards:
-  - 0.369
-  - 0.449
-  - 0.24
-  - 0.06
-  - 0
+  pos:
+    - 0.378
+    - 0.452
+  size:
+    - 0.255
+    - 0.052
 hand_cards:
   card1:
-  - 0.537
-  - 0.668
-  - 0.04
-  - 0.11
-  - -3
+    pos:
+      - 0.546
+      - 0.693
+    size:
+      - 0.028
+      - 0.077
+    r: -4
   card2:
-  - 0.584
-  - 0.682
-  - 0.029
-  - 0.094
-  - 13
+    pos:
+      - 0.587
+      - 0.687
+    size:
+      - 0.028
+      - 0.077
+    r: 12
 ocr:
   language: eng
   oem: 3
   psm: 6
 scan_interval: 1000
 window_title:
-- Poker Fate
+  - Poker Fate
