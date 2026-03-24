@@ -613,7 +613,6 @@ class OCRWorker(threading.Thread):
 
             # 识别花色
             cropped_suit = gray[int(h * delta) : h, 0:w]
-            
 
             _, binary = cv2.threshold(cropped_suit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             # OCR配置 - 使用本地 poker 模型识别花色
@@ -718,10 +717,9 @@ class PokerOCRWindow(QMainWindow):
         layout.addWidget(window_group)
 
         # 扫描设置
-        scan_group = QGroupBox("扫描设置")
+        scan_group = QGroupBox("扫描间隔设置")
         scan_layout = QVBoxLayout()
 
-        scan_layout.addWidget(QLabel("扫描间隔 (毫秒):"))
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(100, 10000)
         self.interval_spin.setValue(self.config["scan_interval"])
@@ -733,17 +731,17 @@ class PokerOCRWindow(QMainWindow):
 
         # 编辑区域
         edit_group = QGroupBox("编辑区域")
-        edit_layout = QVBoxLayout()
+        edit_layout = QHBoxLayout()
 
-        self.hand1_btn = QPushButton("选择手牌1")
+        self.hand1_btn = QPushButton("手牌1")
         self.hand1_btn.clicked.connect(lambda: self.open_region_editor("card1", "手牌1"))
         edit_layout.addWidget(self.hand1_btn)
 
-        self.hand2_btn = QPushButton("选择手牌2")
+        self.hand2_btn = QPushButton("手牌2")
         self.hand2_btn.clicked.connect(lambda: self.open_region_editor("card2", "手牌2"))
         edit_layout.addWidget(self.hand2_btn)
 
-        self.board_btn = QPushButton("选择卡池")
+        self.board_btn = QPushButton("卡池")
         self.board_btn.clicked.connect(lambda: self.open_region_editor("board", "卡池"))
         edit_layout.addWidget(self.board_btn)
 
@@ -831,12 +829,6 @@ class PokerOCRWindow(QMainWindow):
         info_layout = QVBoxLayout()
         info_text = QLabel(
             """
-1. 选择要捕获的扑克窗口
-2. 设置扫描间隔
-3. 点击"开始扫描"
-4. 系统将持续识别手牌和牌池
-5. 结果实时显示在右侧
-
 注意：首次使用需要安装
         """
         )
@@ -853,6 +845,10 @@ class PokerOCRWindow(QMainWindow):
             not_install = QLabel(f"Tesseract OCR引擎 未找到\n{e}")
             not_install.setStyleSheet("color: red;")
             info_layout.addWidget(not_install)
+
+        info_layout.addWidget(QLabel("""
+可根据 assets/images 中的资源训练模型，以提高精确度
+        """))
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
 
