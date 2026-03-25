@@ -284,7 +284,7 @@ class PokerOCRWindow(QMainWindow):
         analysis_layout.addWidget(self.hand_rank_label)
 
         # 我可能牌型
-        analysis_layout.addWidget(QLabel("我可能牌型"))
+        analysis_layout.addWidget(QLabel("我可能牌型 (顺子以上)"))
         my_scroll_area = QScrollArea()
         my_scroll_area.setObjectName("possibleScroll")
         my_scroll_area.setMinimumHeight(150)
@@ -301,7 +301,7 @@ class PokerOCRWindow(QMainWindow):
         analysis_layout.addWidget(my_scroll_area, 1)
 
         # 对手可能牌型
-        analysis_layout.addWidget(QLabel("对手可能牌型"))
+        analysis_layout.addWidget(QLabel("对手可能牌型 (顺子以上)"))
         opponent_scroll_area = QScrollArea()
         opponent_scroll_area.setObjectName("possibleScroll")
         opponent_scroll_area.setMinimumHeight(150)
