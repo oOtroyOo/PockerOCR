@@ -32,29 +32,24 @@ class OCRWorker(threading.Thread):
         # 每次捕获时创建mss实例，避免线程问题
 
     def run(self):
-        """运行扫描循环"""
+        """单次扫描"""
         self.running = True
         os.makedirs("screenshot", exist_ok=True)
         # 将窗口置于前端
         win32gui.SetForegroundWindow(self.hwnd)
         time.sleep(0.5)  # 等待窗口切换
 
-        while self.running:
-            try:
-                if self.hwnd:
-                    # 捕获窗口
-                    screenshot = self.capture_window(self.hwnd)
-                    if screenshot is not None:
-                        # 识别手牌和牌池
-                        result = self.recognize_cards(screenshot)
-                        self.signals.result_updated.emit(result)
+        try:
+            if self.hwnd and self.running:
+                # 捕获窗口
+                screenshot = self.capture_window(self.hwnd)
+                if screenshot is not None:
+                    # 识别手牌和牌池
+                    result = self.recognize_cards(screenshot)
+                    self.signals.result_updated.emit(result)
 
-                # 间隔
-                time.sleep(self.config["scan_interval"] / 1000.0)
-
-            except Exception as e:
-                self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
-                time.sleep(1)
+        except Exception as e:
+            self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
 
     def capture_window(self, hwnd):
         """捕获窗口截图（使用MSS + DXGI）"""
@@ -195,6 +190,9 @@ class OCRWorker(threading.Thread):
             custom_config_suit = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 10 -c tessedit_char_whitelist=SHCD'
             suit = pytesseract.image_to_string(binary, lang="poker", config=custom_config_suit).strip()
             if len(text) == 1 and len(suit) == 1:
+                # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
+                if text == "0":
+                    text = "T"  # OCR 可能将 10 识别为 "0"
                 return (suit, text)
             else:
                 if screenshot_debug_img:

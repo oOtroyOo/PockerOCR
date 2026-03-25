@@ -400,3 +400,21 @@ QLabel#handRankLabel {
     font-weight: bold;
     padding: 6px;
 }
+
+QLabel#myPossibleLabel {
+    background-color: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 4px;
+    color: #69db7c;
+    font-size: 11px;
+    padding: 4px;
+}
+
+QLabel#opponentLabel {
+    background-color: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 4px;
+    color: #74c0fc;
+    font-size: 11px;
+    padding: 4px;
+}

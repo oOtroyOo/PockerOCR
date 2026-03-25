@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QScrollArea,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 import win32gui
 import yaml
 import subprocess
@@ -53,6 +53,12 @@ class PokerOCRWindow(QMainWindow):
         # 初始化牌型评估器
         self.hand_evaluator = CardEvaluator(self)
         self.hand_evaluator.evaluation_completed.connect(self.on_evaluation_completed)
+        
+        # 扫描定时器
+        self.scan_timer = QTimer(self)
+        self.scan_timer.timeout.connect(self.do_single_scan)
+        self.is_scanning = False  # 是否正在扫描中
+        self.evaluation_pending = False  # 是否有待处理的评估
         
         self.init_ui()
 
@@ -267,12 +273,31 @@ class PokerOCRWindow(QMainWindow):
         hand_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(hand_group)
 
-        # 牌型显示
-        self.hand_rank_label = QLabel("牌型: --")
+        # 牌型分析显示
+        analysis_group = QGroupBox("牌型分析")
+        analysis_layout = QVBoxLayout()
+        analysis_layout.setSpacing(4)
+
+        # 我的牌型
+        self.hand_rank_label = QLabel("我的牌型: --")
         self.hand_rank_label.setObjectName("handRankLabel")
-        self.hand_rank_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.hand_rank_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        layout.addWidget(self.hand_rank_label)
+        analysis_layout.addWidget(self.hand_rank_label)
+
+        # 我可能牌型
+        self.my_possible_label = QLabel("我可能牌型: --")
+        self.my_possible_label.setObjectName("myPossibleLabel")
+        self.my_possible_label.setWordWrap(True)
+        analysis_layout.addWidget(self.my_possible_label)
+
+        # 对手可能牌型
+        self.opponent_label = QLabel("对手可能牌型: --")
+        self.opponent_label.setObjectName("opponentLabel")
+        self.opponent_label.setWordWrap(True)
+        analysis_layout.addWidget(self.opponent_label)
+
+        analysis_group.setLayout(analysis_layout)
+        analysis_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        layout.addWidget(analysis_group)
 
         # 上一次结果缓存
         self.last_result_key = None
@@ -342,13 +367,6 @@ class PokerOCRWindow(QMainWindow):
         # 更新配置
         self.config["scan_interval"] = self.interval_spin.value()
 
-        # 创建并启动工作线程
-        self.worker = OCRWorker(self.config)
-        self.worker.hwnd = self.current_hwnd
-        self.worker.signals.result_updated.connect(self.update_result)
-        self.worker.signals.error_occurred.connect(self.handle_error)
-        self.worker.start()
-
         # 更新UI状态
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
@@ -360,12 +378,35 @@ class PokerOCRWindow(QMainWindow):
         st_bar = self.statusBar()
         if st_bar:
             st_bar.showMessage("扫描中...")
+        
+        # 开始扫描
+        self.is_scanning = True
+        self.do_single_scan()
+
+    def do_single_scan(self):
+        """执行单次扫描"""
+        if not self.is_scanning:
+            return
+        
+        # 创建并启动工作线程
+        self.worker = OCRWorker(self.config)
+        self.worker.hwnd = self.current_hwnd or 0
+        self.worker.signals.result_updated.connect(self.update_result)
+        self.worker.signals.error_occurred.connect(self.handle_error)
+        self.worker.start()
 
     def stop_scan(self):
         """停止扫描"""
+        self.is_scanning = False
+        self.scan_timer.stop()
+        self.evaluation_pending = False
+        
         if self.worker:
             self.worker.stop()
             self.worker = None
+        
+        # 停止评估
+        self.hand_evaluator.stop()
 
         # 更新UI状态
         self.start_btn.setEnabled(True)
@@ -467,18 +508,41 @@ class PokerOCRWindow(QMainWindow):
             return "red"
         return "black"  # 黑桃、梅花或其他
 
-    def on_evaluation_completed(self, hand_rank: str, history_text: str):
+    def on_evaluation_completed(self, my_hand: str, my_possible: str, opponent: str, history_text: str):
         """牌型评估完成回调"""
-        self.hand_rank_label.setText(f"牌型: {hand_rank}")
-        self.history_text.append(f"[{hand_rank}] {history_text}")
+        # 更新我的牌型
+        self.hand_rank_label.setText(f"我的牌型: {my_hand}")
+        
+        # 更新我可能牌型
+        self.my_possible_label.setText(f"我可能牌型:\n{my_possible}")
+        
+        # 更新对手可能牌型
+        self.opponent_label.setText(f"对手可能牌型:\n{opponent}")
+        
+        # 添加历史记录
+        self.history_text.append(f"[{my_hand}] {history_text}")
         
         # 滚动到底部
         scroll_bar = self.history_text.verticalScrollBar()
         if scroll_bar:
             scroll_bar.setValue(scroll_bar.maximum())
+        
+        # 评估完成，调度下一次扫描
+        self.evaluation_pending = False
+        self.schedule_next_scan()
+    
+    def schedule_next_scan(self):
+        """调度下一次扫描"""
+        if self.is_scanning and not self.evaluation_pending:
+            interval = self.config.get("scan_interval", 200)
+            self.scan_timer.start(interval)
     
     def closeEvent(self, event):
         """窗口关闭事件，清理资源"""
+        # 停止扫描
+        self.is_scanning = False
+        self.scan_timer.stop()
+        
         # 停止OCR工作线程
         if self.worker:
             self.worker.stop()
@@ -542,7 +606,11 @@ class PokerOCRWindow(QMainWindow):
             board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
             
             # 异步评估牌型
+            self.evaluation_pending = True
             self.hand_evaluator.start_evaluation(hand_cards, board_cards, f"手牌: {hand_str} | 牌池: {board_str}")
+        else:
+            # 无需评估，直接调度下一次扫描
+            self.schedule_next_scan()
 
     def handle_error(self, error_msg):
         """处理错误"""
