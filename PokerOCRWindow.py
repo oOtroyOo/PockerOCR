@@ -74,8 +74,7 @@ class PokerOCRWindow(QMainWindow):
     def init_ui(self):
         """初始化UI"""
         self.setWindowTitle("扑克OCR识别系统")
-        self.resize(720, 520)
-        self.move(100, 100)
+        self.resize(500, 520)
 
         # 中心部件
         central_widget = QWidget()
@@ -285,21 +284,41 @@ class PokerOCRWindow(QMainWindow):
         analysis_layout.addWidget(self.hand_rank_label)
 
         # 我可能牌型
-        self.my_possible_label = QLabel("我可能牌型: --")
-        self.my_possible_label.setObjectName("myPossibleLabel")
+        analysis_layout.addWidget(QLabel("我可能牌型"))
+        my_scroll_area = QScrollArea()
+        my_scroll_area.setObjectName("possibleScroll")
+        my_scroll_area.setMinimumHeight(150)
+        my_scroll_area.setWidgetResizable(True)
+        my_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        my_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        my_scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.my_possible_label = QLabel()
+        self.my_possible_label.setObjectName("possibleLabel")
         self.my_possible_label.setWordWrap(True)
         self.my_possible_label.setTextFormat(Qt.TextFormat.RichText)
-        analysis_layout.addWidget(self.my_possible_label)
+        self.my_possible_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        my_scroll_area.setWidget(self.my_possible_label)
+        analysis_layout.addWidget(my_scroll_area, 1)
 
         # 对手可能牌型
-        self.opponent_label = QLabel("对手可能牌型: --")
-        self.opponent_label.setObjectName("opponentLabel")
+        analysis_layout.addWidget(QLabel("对手可能牌型"))
+        opponent_scroll_area = QScrollArea()
+        opponent_scroll_area.setObjectName("possibleScroll")
+        opponent_scroll_area.setMinimumHeight(150)
+        opponent_scroll_area.setWidgetResizable(True)
+        opponent_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        opponent_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        opponent_scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.opponent_label = QLabel()
+        self.opponent_label.setObjectName("possibleLabel")
         self.opponent_label.setWordWrap(True)
         self.opponent_label.setTextFormat(Qt.TextFormat.RichText)
-        analysis_layout.addWidget(self.opponent_label)
+        self.opponent_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        opponent_scroll_area.setWidget(self.opponent_label)
+        analysis_layout.addWidget(opponent_scroll_area, 1)
 
         analysis_group.setLayout(analysis_layout)
-        analysis_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        analysis_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout.addWidget(analysis_group)
 
         # 上一次结果缓存
@@ -409,7 +428,6 @@ class PokerOCRWindow(QMainWindow):
         if self.worker:
             self.worker.stop()
             self.worker = None
-
         # 停止评估
         self.hand_evaluator.stop()
 
@@ -424,6 +442,7 @@ class PokerOCRWindow(QMainWindow):
         st_bar = self.statusBar()
         if st_bar:
             st_bar.showMessage("扫描已停止")
+        self.last_result_key = None
 
     def run_training(self):
         """运行Tesseract模型训练"""
@@ -519,10 +538,10 @@ class PokerOCRWindow(QMainWindow):
         self.hand_rank_label.setText(f"我的牌型: {my_hand}")
 
         # 更新我可能牌型
-        self.my_possible_label.setText(f"我可能牌型:\n{my_possible}")
+        self.my_possible_label.setText(my_possible)
 
         # 更新对手可能牌型
-        self.opponent_label.setText(f"对手可能牌型:\n{opponent}")
+        self.opponent_label.setText(opponent)
 
         # 添加历史记录
         self.history_text.append(f"[{my_hand}] {history_text}")
@@ -597,26 +616,27 @@ class PokerOCRWindow(QMainWindow):
                 label.setProperty("suitColor", "")
             self.refresh_style(label)
 
-        # 生成结果 key 用于检测变化
-        result_key = str(hand_cards) + str(board_cards)
-        result_changed = result_key != self.last_result_key
-        self.last_result_key = result_key
+        if self.is_scanning:
+            # 生成结果 key 用于检测变化
+            result_key = str(hand_cards) + str(board_cards)
+            result_changed = result_key != self.last_result_key
+            self.last_result_key = result_key
 
-        # 计算牌型：结果变化 + 有手牌 + 有3张以上池牌
-        valid_hand = len([c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 2
-        valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 3
+            # 计算牌型：结果变化 + 有手牌 + 有3张以上池牌
+            valid_hand = len([c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 2
+            valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 3
 
-        if result_changed and valid_hand and valid_board:
-            # 准备历史记录文本
-            hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
-            board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
+            if result_changed and valid_hand and valid_board:
+                # 准备历史记录文本
+                hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
+                board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
 
-            # 异步评估牌型
-            self.evaluation_pending = True
-            self.hand_evaluator.start_evaluation(hand_cards, board_cards, f"手牌: {hand_str} | 牌池: {board_str}")
-        else:
-            # 无需评估，直接调度下一次扫描
-            self.schedule_next_scan()
+                # 异步评估牌型
+                self.evaluation_pending = True
+                self.hand_evaluator.start_evaluation(hand_cards, board_cards, f"手牌: {hand_str} | 牌池: {board_str}")
+            else:
+                # 无需评估，直接调度下一次扫描
+                self.schedule_next_scan()
 
     def handle_error(self, error_msg):
         """处理错误"""

@@ -296,10 +296,10 @@ class CardEvaluatorWorker(QObject):
             (my_possible, opponent_possible)
         """
         # 过滤空值
-        board_valid = [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]
-        hand_valid = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]
+        board_cards = [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]
+        hand_cards = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]
 
-        known_cards = board_valid + hand_valid
+        known_cards = board_cards + hand_cards
 
         if len(known_cards) < 5:
             return [], []
@@ -316,12 +316,11 @@ class CardEvaluatorWorker(QObject):
         my_possible: dict[str, list] = {}
 
         if len(known_cards) < 7:
-            for river_card in available:
-                all_cards = known_cards + [river_card]
-                # 从这7张中选5张最佳组合
-                for combo in combinations(all_cards, 5):
-                    combo_list = list(combo)
-                    result = self._evaluate_five_cards(combo_list)
+            # 从这7张中选5张最佳组合
+            for combo_unknown in combinations(available, 5 - len(board_cards)):
+                cards7 = known_cards + list(combo_unknown)
+                for combo5 in combinations(cards7, 5):
+                    result = self._evaluate_five_cards(list(combo5))
 
                     # 只统计顺子及以上
                     if result.rank >= 5:
@@ -329,9 +328,9 @@ class CardEvaluatorWorker(QObject):
                             my_possible[result.name] = []
 
                         # 去重
-                        cards_str = cards_to_str(combo_list)
+                        cards_str = cards_to_str(result.cards)
                         if cards_str not in [cards_to_str(c) for c in my_possible[result.name]]:
-                            my_possible[result.name].append(combo_list)
+                            my_possible[result.name].append(result.cards)
             for name, card_list in my_possible.items():
                 card_list.sort(
                     key=lambda cards: sum([(index * 100 + (RANK_ORDER.get(cards[index][1], 0) * 10 + (4 - all_suits.index(cards[index][0])))) for index in range(len(cards))]),
@@ -341,28 +340,21 @@ class CardEvaluatorWorker(QObject):
         # ========== 对手可能的牌型（基于牌池+河牌推断）==========
         opponent_possible = {}
 
-        # 策略：遍历河牌，看牌池+河牌能否组成大牌
-        # 如果能，则对手用任意两张能补足该牌型的牌即可
-        for river_card in available:
-            board_with_river = board_valid + [river_card]
+        for combo_unknown in combinations(available, 7 - len(board_cards)):
+            #  从这7张中选5张最佳组合
+            cards7 = board_cards + list(combo_unknown)
+            for combo5 in combinations(cards7, 5):
+                result = self._evaluate_five_cards(list(combo5))
 
-            # 从牌池+河牌的7张中选5张，看能组成什么大牌
-            for combo in combinations(board_with_river, 5):
-                combo_list = list(combo)
-                result = self._evaluate_five_cards(combo_list)
-
-                # 只统计比我大的牌型
-                if result.rank > my_rank:
+                # 只统计顺子及以上比我大的牌型
+                if result.rank >= 5 and result.rank > my_rank:
                     if result.name not in opponent_possible:
                         opponent_possible[result.name] = []
 
                     # 检查是否已存在
-                    cards_str = cards_to_str(combo_list)
+                    cards_str = cards_to_str(result.cards)
                     if cards_str not in [cards_to_str(c) for c in opponent_possible[result.name]]:
-                        # 检查对手能否拿到这个组合（至少2张是未知牌）
-                        unknown_in_combo = [c for c in combo_list if c not in board_valid]
-                        if len(unknown_in_combo) <= 2:  # 最多需要2张未知牌（对手手牌）
-                            opponent_possible[result.name].append(combo_list)
+                        opponent_possible[result.name].append(result.cards)
 
         # 格式化结果
         my_result = []

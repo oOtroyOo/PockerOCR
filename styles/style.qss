@@ -232,7 +232,7 @@ QTextEdit {
     border-radius: 6px;
     color: #00d4aa;
     padding: 6px;
-    font-family: 'Consolas', 'Monaco', monospace;
+    font-family: 'Monaco'，"Consolas", "Courier New", monospace;
     font-size: 10px;
 }
 
@@ -331,6 +331,17 @@ QScrollArea > QWidget > QWidget {
     background-color: transparent;
 }
 
+
+QScrollArea#possibleScroll {
+    background-color: #1a1a2e;
+    border: 1px solid #2d2d44;
+    border-radius: 6px;
+}
+
+QScrollArea#possibleScroll > QWidget > QWidget {
+    background-color: #1a1a2e;
+}
+
 /* 滚动条整体 */
 QScrollBar:vertical {
     background-color: #1a1a2e;
@@ -401,20 +412,9 @@ QLabel#handRankLabel {
     padding: 6px;
 }
 
-QLabel#myPossibleLabel {
-    background-color: #1a1a2e;
-    border: 1px solid #2d2d44;
-    border-radius: 4px;
-    /* color: #69db7c; */
+QLabel#possibleLabel {
     font-size: 14px;
     padding: 4px;
+    font-family: 'Monaco'，"Consolas", "Courier New", monospace;
 }
 
-QLabel#opponentLabel {
-    background-color: #1a1a2e;
-    border: 1px solid #2d2d44;
-    border-radius: 4px;
-    /* color: #74c0fc; */
-    font-size: 14px;
-    padding: 4px;
-}

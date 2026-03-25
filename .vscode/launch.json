@@ -19,6 +19,14 @@
             "program": "trainer.py",
             "console": "integratedTerminal",
             "args": ""
+        },
+        {
+            "name": "Python 打包",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "build_exe.py",
+            "console": "integratedTerminal",
+            "args": ""
         }
     ]
 }

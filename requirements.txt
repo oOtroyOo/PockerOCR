@@ -8,4 +8,4 @@ pydirectinput
 pygetwindow
 mss
 pyyaml
-PySide6
+pyinstaller
