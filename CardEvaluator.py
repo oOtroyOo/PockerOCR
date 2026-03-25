@@ -35,6 +35,7 @@ SUIT_SYMBOLS = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
 # 所有可能的牌
 all_suits = ["S", "C", "H", "D"]
 all_ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+all_ranks.reverse()
 
 
 class HandResult(NamedTuple):
@@ -181,7 +182,6 @@ class CardEvaluatorWorker(QObject):
                 best_result = result
 
         return best_result or HandResult("高牌", 1, 0, [], cards[:5])
-
 
     def _compare_hands(self, h1: HandResult, h2: HandResult) -> int:
         """比较两个牌型，返回 >0 表示 h1 更大"""
@@ -342,12 +342,16 @@ class CardEvaluatorWorker(QObject):
                     continue
                 if is_opponent:
                     if my_hand:
-                        if result.rank <= my_hand.rank:
+                        if result.rank < my_hand.rank:
                             continue
                         elif result.rank == my_hand.rank:
+                            skip = False
                             for i in range(min(len(my_hand.cards), len(result.cards))):
-                                if my_hand.cards[i][1] > result.cards[i][1]:
-                                    continue
+                                if RANK_ORDER.get(my_hand.cards[i][1], 0) > RANK_ORDER.get(result.cards[i][1], 0):
+                                    skip = True
+                                    break
+                            if skip:
+                                continue
 
                 # 去重检查
                 cards_str = " ".join(f"{c[0]}{c[1]}" for c in result.cards)
@@ -393,8 +397,8 @@ class CardEvaluatorWorker(QObject):
 
         # 同花顺
         if is_flush and is_straight:
-            cards_sorted = sorted(cards, key=lambda x: RANK_ORDER.get(x[1], 0), reverse=True)
-            return HandResult("同花顺", 9, straight_high, [], cards_sorted)
+            cards.sort(key=lambda x: RANK_ORDER.get(x[1], 0), reverse=True)
+            return HandResult("同花顺", 9, straight_high, [], cards)
 
         # 四条
         if count_values == [4, 1]:
