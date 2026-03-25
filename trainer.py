@@ -350,23 +350,23 @@ def create_config_files():
     traineddata_dir.mkdir(parents=True, exist_ok=True)
 
     # 创建 poker.config 文件
-    config_file = traineddata_dir / "poker.config"
-    with open(config_file, "w") as f:
-        f.write("# Poker OCR Configuration\n")
-        f.write("tessedit_char_whitelist AKQJT23456789SHCD\n")
-    print(f"创建配置文件: {config_file}")
+    # config_file = traineddata_dir / "poker.config"
+    # with open(config_file, "w") as f:
+    #     f.write("# Poker OCR Configuration\n")
+    #     f.write("tessedit_char_whitelist AKQJT23456789SHCD\n")
+    # print(f"创建配置文件: {config_file}")
 
-    # 创建用户词库
-    wordlist_file = traineddata_dir / "poker.wordlist"
-    with open(wordlist_file, "w") as f:
-        for rank in "AKQJT23456789":
-            f.write(f"{rank}\n")
-        for suit in "SHCD":
-            f.write(f"{suit}\n")
-        for rank in "AKQJT23456789":
-            for suit in "SHCD":
-                f.write(f"{rank}{suit}\n")
-    print(f"创建词库: {wordlist_file}")
+    # # 创建用户词库
+    # wordlist_file = traineddata_dir / "poker.wordlist"
+    # with open(wordlist_file, "w") as f:
+    #     for rank in "AKQJT23456789":
+    #         f.write(f"{rank}\n")
+    #     for suit in "SHCD":
+    #         f.write(f"{suit}\n")
+    #     for rank in "AKQJT23456789":
+    #         for suit in "SHCD":
+    #             f.write(f"{rank}{suit}\n")
+    # print(f"创建词库: {wordlist_file}")
 
 
 def main():

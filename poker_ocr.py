@@ -26,629 +26,19 @@ from PyQt5.QtWidgets import (
     QSlider,
     QDoubleSpinBox,
     QSizePolicy,
+    QScrollArea,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, QPointF
+from PyQt5.QtCore import Qt, pyqtSignal, QPointF
 from PyQt5.QtGui import QPolygonF
-from PyQt5.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QColor
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 import win32gui
-import pytesseract
 import yaml
 import subprocess
 import mss
 import typing
 
-def load_stylesheet(app, qss_file_path="styles/style.qss"):
-    """从 QSS 文件加载样式表"""
-    try:
-        # 获取脚本所在目录的绝对路径
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(script_dir, qss_file_path)
-
-        with open(full_path, "r", encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
-        print(f"样式表已加载: {full_path}")
-    except FileNotFoundError:
-        print(f"样式文件不存在: {qss_file_path}")
-    except Exception as e:
-        print(f"加载样式失败: {e}")
-
-
-def refresh_style(widget):
-    """刷新控件样式，使属性选择器生效"""
-    style = widget.style()
-    if style:
-        style.unpolish(widget)
-        style.polish(widget)
-
-
-screenshot_debug_img = os.path.exists("screenshot")
-
-
-class RegionEditorDialog(QDialog):
-    """区域编辑对话框"""
-
-    def __init__(self, parent, image, current_config, region_key, region_name):
-        super().__init__(parent)
-        h, w = image.shape[:2]
-
-        # 转换为QPixmap
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        qt_image = QImage(rgb_image.data, w, h, 3 * w, QImage.Format.Format_RGB888)
-        self.pixmap = QPixmap.fromImage(qt_image)
-        self.current_config = current_config or {}
-        self.region_key = region_key
-        self.region_name = region_name
-        self.region = self.get_current_region()
-        self.init_ui()
-        self.update_preview()
-
-    def get_current_region(self) -> dict[str, typing.Any]:
-        """获取当前区域配置"""
-        # 格式: {"pos": [x, y], "size": [w, h], "r": rotation}
-        if self.region_key == "card1":
-            return self.current_config.get("hand_cards", {}).get("card1", {})
-        elif self.region_key == "card2":
-            return self.current_config.get("hand_cards", {}).get("card2", {})
-        elif self.region_key == "board":
-            return self.current_config.get("board_cards", {})
-        return {}
-
-    def init_ui(self):
-        """初始化UI"""
-        self.setWindowTitle(f"区域编辑 - {self.region_name}")
-        # self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        # self.setMinimumSize(600, 500)
-        # self.resize(self.pixmap.width(), self.pixmap.height())
-        layout = QVBoxLayout()
-
-        # 图片预览
-        self.image_label = ClickableLabel()
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.image_label.setMinimumSize(580, 400)
-        self.image_label.resize(self.pixmap.width(), self.pixmap.height())
-        self.image_label.parent_dialog = self
-        self.image_label.set_click_callback(self.on_image_click)
-        self.image_label.set_release_callback(self.on_image_release)
-        layout.addWidget(self.image_label)
-
-        # 控制面板
-        control_layout = QHBoxLayout()
-
-        # 旋转滑块
-        if self.region.get("r", None):
-            control_layout.addWidget(QLabel("旋转角度:"))
-            self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
-            self.rotation_slider.setRange(-45, 45)
-            self.rotation_slider.setValue(int(self.region["r"]))
-            self.rotation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-            self.rotation_slider.setTickInterval(5)
-            self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
-            control_layout.addWidget(self.rotation_slider)
-            self.rotation_label = QLabel(f"{self.region['r']}°")
-            control_layout.addWidget(self.rotation_label)
-
-        # 区域尺寸控制
-        control_layout.addWidget(QLabel("宽度:"))
-        self.width_spin = QDoubleSpinBox()
-        self.width_spin.setRange(0.01, 0.99)
-        self.width_spin.setSingleStep(0.01)
-        self.width_spin.setValue(self.region.get("size", [])[0])
-        self.width_spin.valueChanged.connect(self.on_region_changed)
-        control_layout.addWidget(self.width_spin)
-
-        control_layout.addWidget(QLabel("高度:"))
-        self.height_spin = QDoubleSpinBox()
-        self.height_spin.setRange(0.01, 0.99)
-        self.height_spin.setSingleStep(0.01)
-        self.height_spin.setValue(self.region.get("size", [])[1])
-        self.height_spin.valueChanged.connect(self.on_region_changed)
-        control_layout.addWidget(self.height_spin)
-
-        layout.addLayout(control_layout)
-
-        # 按钮布局
-        button_layout = QHBoxLayout()
-
-        reset_btn = QPushButton("重置")
-        reset_btn.clicked.connect(self.reset_region)
-        button_layout.addWidget(reset_btn)
-
-        button_layout.addStretch()
-
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-
-        save_btn = QPushButton("保存")
-        save_btn.clicked.connect(self.save_region)
-        button_layout.addWidget(save_btn)
-
-        layout.addLayout(button_layout)
-
-        self.setLayout(layout)
-
-    def update_preview(self):
-        """更新预览"""
-        if self.pixmap is None:
-            return
-
-        # 缩放到显示尺寸，保持宽高比
-        scaled_pixmap = self.pixmap.scaled(self.image_label.width(), self.image_label.height(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-
-        # 计算缩放后的实际尺寸和偏移量（居中显示）
-        scaled_w = scaled_pixmap.width()
-        scaled_h = scaled_pixmap.height()
-        self.image_label.image_offset_x = (self.image_label.width() - scaled_w) // 2
-        self.image_label.image_offset_y = (self.image_label.height() - scaled_h) // 2
-
-        # 绘制区域框
-        painter = QPainter(scaled_pixmap)
-
-        # 绘制虚线框（已有区域，带旋转）
-        x = int(self.region.get("pos", {})[0] * scaled_w)
-        y = int(self.region.get("pos", {})[1] * scaled_h)
-        rw = int(self.region.get("size", {})[0] * scaled_w)
-        rh = int(self.region.get("size", {})[1] * scaled_h)
-        rotation = self.region.get("r", 0)
-
-        pen = QPen(QColor("#2196F3"), 2)
-        pen.setStyle(Qt.PenStyle.DashLine)
-        painter.setPen(pen)
-
-        if rotation != 0:
-            # 绘制旋转后的矩形
-            self.draw_rotated_rect(painter, x, y, rw, rh, rotation)
-        else:
-            # 绘制普通矩形
-            painter.drawRect(x, y, rw, rh)
-
-        # 绘制实线框（用户框选区域或拖拽区域）
-        if hasattr(self, "user_region") and self.user_region:
-            ux, uy, uw, uh = self.user_region
-            ux = int(ux * scaled_w)
-            uy = int(uy * scaled_h)
-            uw = int(uw * scaled_w)
-            uh = int(uh * scaled_h)
-            pen.setStyle(Qt.PenStyle.SolidLine)
-            pen.setColor(QColor("#f44336"))
-            pen.setWidth(3)
-            painter.setPen(pen)
-
-            if rotation != 0:
-                # 绘制旋转后的矩形
-                self.draw_rotated_rect(painter, ux, uy, uw, uh, rotation)
-            else:
-                # 绘制普通矩形
-                painter.drawRect(ux, uy, uw, uh)
-        elif self.image_label.is_dragging and self.image_label.start_pos and self.image_label.current_pos:
-            # 绘制拖拽框
-            start = self.image_label.start_pos
-            current = self.image_label.current_pos
-            offset_x = self.image_label.image_offset_x
-            offset_y = self.image_label.image_offset_y
-
-            # 确保在图片范围内
-            x1 = max(offset_x, min(start.x(), current.x()))
-            y1 = max(offset_y, min(start.y(), current.y()))
-            x2 = min(offset_x + scaled_w, max(start.x(), current.x()))
-            y2 = min(offset_y + scaled_h, max(start.y(), current.y()))
-
-            rw = max(0, x2 - x1)
-            rh = max(0, y2 - y1)
-
-            if rw > 0 and rh > 0:
-                pen.setStyle(Qt.PenStyle.SolidLine)
-                pen.setColor(QColor("#4CAF50"))
-                pen.setWidth(2)
-                painter.setPen(pen)
-                painter.drawRect(x1 - offset_x, y1 - offset_y, rw, rh)
-
-        painter.end()
-
-        self.image_label.setPixmap(scaled_pixmap)
-
-    def draw_rotated_rect(self, painter, x, y, w, h, angle):
-        """绘制旋转的矩形"""
-        import math
-
-        # 将角度转换为弧度
-        angle_rad = math.radians(angle)
-
-        # 矩形的中心点
-        center_x = x + w / 2
-        center_y = y + h / 2
-
-        # 计算旋转后的四个角点
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-
-        # 相对于中心的四个角点（未旋转）
-        corners = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
-
-        # 旋转并平移回实际位置
-        polygon_points = []
-        for cx, cy in corners:
-            rx = cx * cos_a - cy * sin_a + center_x
-            ry = cx * sin_a + cy * cos_a + center_y
-            polygon_points.append(QPointF(rx, ry))
-
-        painter.drawPolygon(QPolygonF(polygon_points))
-
-    def on_image_click(self, event):
-        """处理图片点击（开始框选区域）"""
-        if self.pixmap is None:
-            return
-
-        # 获取点击位置
-        label_pos = event.pos()
-        pixmap = self.image_label.pixmap()
-        if not pixmap:
-            return
-
-        # 获取缩放后的图片尺寸和偏移量
-        scaled_w = pixmap.width()
-        scaled_h = pixmap.height()
-        offset_x = self.image_label.image_offset_x
-        offset_y = self.image_label.image_offset_y
-
-        # 检查点击是否在图片范围内
-        if label_pos.x() < offset_x or label_pos.x() >= offset_x + scaled_w:
-            return
-        if label_pos.y() < offset_y or label_pos.y() >= offset_y + scaled_h:
-            return
-
-    def on_image_release(self, event):
-        """处理图片释放（完成框选区域）"""
-        if self.pixmap is None:
-            return
-
-        # 获取释放位置
-        label_pos = event.pos()
-        pixmap = self.image_label.pixmap()
-        if not pixmap:
-            return
-
-        # 获取缩放后的图片尺寸和偏移量
-        scaled_w = pixmap.width()
-        scaled_h = pixmap.height()
-        offset_x = self.image_label.image_offset_x
-        offset_y = self.image_label.image_offset_y
-
-        # 拖拽完成，更新区域
-        start = self.image_label.start_pos
-        current = label_pos
-
-        if start and current:
-            # 确保在图片范围内
-            x1 = max(offset_x, min(start.x(), current.x()))
-            y1 = max(offset_y, min(start.y(), current.y()))
-            x2 = min(offset_x + scaled_w, max(start.x(), current.x()))
-            y2 = min(offset_y + scaled_h, max(start.y(), current.y()))
-
-            rw = max(0, x2 - x1)
-            rh = max(0, y2 - y1)
-
-            # 转换为缩放图坐标
-            scaled_x = x1 - offset_x
-            scaled_y = y1 - offset_y
-            scaled_w_region = rw
-            scaled_h_region = rh
-
-            # 转换为百分比
-            x = max(0, min(1, (scaled_x / scaled_w)))
-            y = max(0, min(1, (scaled_y / scaled_h)))
-            region_w_percent = max(0.01, min(0.5, (scaled_w_region / scaled_w)))
-            region_h_percent = max(0.01, min(0.5, (scaled_h_region / scaled_h)))
-
-            # 更新用户框选区域
-            self.user_region = (x, y, region_w_percent, region_h_percent)
-
-            # 更新配置区域
-            self.region["x"] = x
-            self.region["y"] = y
-            self.region["w"] = region_w_percent
-            self.region["h"] = region_h_percent
-            self.width_spin.setValue(region_w_percent)
-            self.height_spin.setValue(region_h_percent)
-
-            self.update_preview()
-
-    def on_rotation_changed(self):
-        """旋转角度改变"""
-        rotation = self.rotation_slider.value()
-        self.region["r"] = rotation
-        self.rotation_label.setText(f"{rotation}°")
-        self.update_preview()
-
-    def on_region_changed(self):
-        """区域尺寸改变"""
-        self.region["w"] = self.width_spin.value()
-        self.region["h"] = self.height_spin.value()
-        self.update_preview()
-
-    def reset_region(self):
-        """重置区域"""
-        self.region = self.get_current_region()
-        self.rotation_slider.setValue(int(self.region["r"]))
-        self.width_spin.setValue(self.region["w"])
-        self.height_spin.setValue(self.region["h"])
-        if hasattr(self, "user_region"):
-            del self.user_region
-        self.update_preview()
-
-    def save_region(self):
-        """保存区域"""
-        # 转换为配置文件格式 {"pos": [x, y], "size": [w, h], "r": rotation}
-        region_dict = {
-            "pos": [round(self.region["x"], 2), round(self.region["y"], 2)],
-            "size": [round(self.region["w"], 2), round(self.region["h"], 2)],
-            "r": round(self.region["r"], 2),
-        }
-        if self.region_key == "card1":
-            if "hand_cards" not in self.current_config:
-                self.current_config["hand_cards"] = {}
-            self.current_config["hand_cards"]["card1"] = region_dict
-        elif self.region_key == "card2":
-            if "hand_cards" not in self.current_config:
-                self.current_config["hand_cards"] = {}
-            self.current_config["hand_cards"]["card2"] = region_dict
-        elif self.region_key == "board":
-            self.current_config["board_cards"] = region_dict
-
-        self.accept()
-
-    def get_updated_config(self):
-        """获取更新后的配置"""
-        return self.current_config
-
-
-class ClickableLabel(QLabel):
-    """可点击的标签，用于区域选择"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._parent_dialog = None
-        self.start_pos = None
-        self.current_pos = None
-        self.is_dragging = False
-        self.click_callback = None
-        self.release_callback = None
-        self.image_offset_x = 0
-        self.image_offset_y = 0
-
-    def set_click_callback(self, callback):
-        """设置点击回调函数"""
-        self.click_callback = callback
-
-    def set_release_callback(self, callback):
-        """设置释放回调函数"""
-        self.release_callback = callback
-
-    @property
-    def parent_dialog(self):
-        """获取父对话框"""
-        return self._parent_dialog
-
-    @parent_dialog.setter
-    def parent_dialog(self, value):
-        """设置父对话框"""
-        self._parent_dialog = value
-
-    def mousePressEvent(self, event):
-        """鼠标按下事件"""
-        self.start_pos = event.pos()
-        self.current_pos = event.pos()
-        self.is_dragging = True
-        if self.click_callback:
-            self.click_callback(event)
-
-    def mouseMoveEvent(self, event):
-        """鼠标移动事件"""
-        self.current_pos = event.pos()
-        if self._parent_dialog and self.is_dragging:
-            self._parent_dialog.update_preview()
-
-    def mouseReleaseEvent(self, event):
-        """鼠标释放事件"""
-        was_dragging = self.is_dragging
-        self.is_dragging = False
-        if was_dragging and self.release_callback:
-            self.release_callback(event)
-
-
-class WorkerSignals(QObject):
-    """工作线程信号"""
-
-    result_updated = pyqtSignal(dict)
-    error_occurred = pyqtSignal(str)
-
-
-class OCRWorker(threading.Thread):
-    """OCR工作线程"""
-
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.signals = WorkerSignals()
-        self.running = False
-        self.hwnd = 0
-        self.daemon = True
-        # 每次捕获时创建mss实例，避免线程问题
-
-    def run(self):
-        """运行扫描循环"""
-        self.running = True
-        os.makedirs("screenshot", exist_ok=True)
-        # 将窗口置于前端
-        win32gui.SetForegroundWindow(self.hwnd)
-        time.sleep(0.5)  # 等待窗口切换
-
-        while self.running:
-            try:
-                if self.hwnd:
-                    # 捕获窗口
-                    screenshot = self.capture_window(self.hwnd)
-                    if screenshot is not None:
-                        # 识别手牌和牌池
-                        result = self.recognize_cards(screenshot)
-                        self.signals.result_updated.emit(result)
-
-                # 间隔
-                time.sleep(self.config["scan_interval"] / 1000.0)
-
-            except Exception as e:
-                self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
-                time.sleep(1)
-
-    def capture_window(self, hwnd):
-        """捕获窗口截图（使用MSS + DXGI）"""
-        try:
-            title = win32gui.GetWindowText(hwnd)
-
-            # 获取窗口位置和尺寸
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-            width = right - left
-            height = bottom - top
-
-            # 在每次捕获时创建新的mss实例，避免线程问题
-            sct = mss.mss()
-
-            # 使用MSS截取指定区域（窗口区域）
-            monitor = {"top": top, "left": left, "width": width, "height": height}
-            screenshot = sct.grab(monitor)
-
-            # 转换为numpy数组（BGRA格式）
-            img = np.array(screenshot)
-
-            # 转换BGRA到BGR
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-            # 保存调试图像
-            if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/screenshot.png", img)
-
-            return img
-
-        except Exception as e:
-            self.signals.error_occurred.emit(f"截图错误: {str(e)}")
-            return None
-
-    def recognize_cards(self, image):
-        """识别手牌和牌池"""
-        result = {"hand_cards": [], "board_cards": [], "timestamp": time.strftime("%H:%M:%S")}
-
-        h, w = image.shape[:2]
-
-        # 识别手牌
-        hand1_pos = self.config["hand_cards"]["card1"]
-        hand2_pos = self.config["hand_cards"]["card2"]
-
-        card1 = self.crop_and_ocr(image, hand1_pos, w, h)
-        card2 = self.crop_and_ocr(image, hand2_pos, w, h)
-
-        result["hand_cards"] = [card1, card2]
-
-        # 识别牌池（支持5张牌）
-        board_cards = self.config["board_cards"]
-
-        pos_list = board_cards.get("pos", [0, 0])
-        size_list = board_cards.get("size", [0, 0])
-
-        x = int(pos_list[0] * w)
-        y = int(pos_list[1] * h)
-        area_w = int(size_list[0] * w)
-        area_h = int(size_list[1] * h)
-        card_width = int(size_list[0] * 0.2 * 0.4 * w)
-
-        # 先裁剪牌池区域
-        board_region = image[y : y + area_h, x : x + area_w]
-
-        if screenshot_debug_img:
-            cv2.imwrite(f"screenshot/board_region.png", board_region)
-        # 尝试识别5张牌
-        for i in range(5):
-            card_x = int(area_w * i * 0.2)
-            card_img = board_region[:, card_x : card_x + card_width]
-            if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
-            card_text = self.ocr_image(card_img)
-            result["board_cards"].append(card_text)
-
-        return result
-
-    def crop_and_ocr(self, image, pos, w, h):
-        """裁剪并OCR识别"""
-        # pos 格式: {"pos": [x, y], "size": [w, h], "r": rotation}
-        pos_list = pos.get("pos", [0, 0])
-        size_list = pos.get("size", [0, 0])
-        rotation = pos.get("r", 0)
-
-        x = int(pos_list[0] * w)
-        y = int(pos_list[1] * h)
-        pw = int(size_list[0] * w)
-        ph = int(size_list[1] * h)
-
-        # 如果有旋转，先旋转再裁剪
-        if rotation != 0:
-            # 创建旋转矩阵
-            center = (x + pw // 2, y + ph // 2)
-            M = cv2.getRotationMatrix2D(center, rotation, 1.0)
-            # 旋转图像
-            rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            cropped = rotated[y : y + ph, x : x + pw]
-        else:
-            cropped = image[y : y + ph, x : x + pw]
-
-        # 保存原始图像到本地
-        if screenshot_debug_img:
-            cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
-        return self.ocr_image(cropped)
-
-    def ocr_image(self, image):
-        """OCR识别图像，使用本地训练的 poker 模型"""
-        try:
-            h, w = image.shape[:2]
-            delta = 0.65
-
-            # 获取训练数据目录的绝对路径
-            tessdata_dir = os.path.abspath("assets/traineddata")
-
-            # 预处理
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-            # 识别点数
-            cropped_num = gray[0 : int(h * delta), 0:w]
-
-            # 二值化
-            _, binary = cv2.threshold(cropped_num, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-            # OCR配置 - 使用本地 poker 模型识别点数
-            custom_config_number = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
-
-            text = pytesseract.image_to_string(binary, lang="poker", config=custom_config_number).strip()
-
-            # 识别花色
-            cropped_suit = gray[int(h * delta) : h, 0:w]
-
-            _, binary = cv2.threshold(cropped_suit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            # OCR配置 - 使用本地 poker 模型识别花色
-            custom_config_suit = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 10 -c tessedit_char_whitelist=SHCD'
-            suit = pytesseract.image_to_string(binary, lang="poker", config=custom_config_suit).strip()
-            if len(text) == 1 and len(suit) == 1:
-                return (suit, text)
-            else:
-                if screenshot_debug_img:
-                    cv2.imwrite(f"screenshot/cropped_num.png", cropped_num)
-                    cv2.imwrite(f"screenshot/cropped_suit.png", cropped_suit)
-            return ("", "")
-
-        except Exception as e:
-            self.signals.error_occurred.emit(f"OCR错误: {str(e)}")
-            return ""
-
-    def stop(self):
-        """停止扫描"""
-        self.running = False
+from OCRWorker import OCRWorker
+from RegionEditorDialog import RegionEditorDialog
 
 
 class PokerOCRWindow(QMainWindow):
@@ -679,10 +69,12 @@ class PokerOCRWindow(QMainWindow):
     def init_ui(self):
         """初始化UI"""
         self.setWindowTitle("扑克OCR识别系统")
-        self.setGeometry(100, 100, 720, 520)
+        self.resize(720, 520)
+        self.move(100, 100)
 
         # 中心部件
         central_widget = QWidget()
+        central_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setCentralWidget(central_widget)
 
         # 主布局
@@ -695,16 +87,18 @@ class PokerOCRWindow(QMainWindow):
         title_label = QLabel("♠️♥️扑克OCR♣️♦️")
         title_label.setObjectName("titleLabel")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         main_layout.addWidget(title_label)
 
         # 分割布局
         content_layout = QHBoxLayout()
         content_layout.setSpacing(8)
-        main_layout.addLayout(content_layout)
+        main_layout.addLayout(content_layout, 1)
 
         # 左侧控制面板
         control_container = QWidget()
         control_container.setMaximumWidth(190)
+        control_container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         control_panel = self.create_control_panel()
         control_container.setLayout(control_panel)
         content_layout.addWidget(control_container, 0)
@@ -718,16 +112,25 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage("准备就绪")
 
+    def refresh_style(self, widget):
+        """刷新控件样式，使属性选择器生效"""
+        style = widget.style()
+        if style:
+            style.unpolish(widget)
+            style.polish(widget)
+
     def create_control_panel(self):
         """创建控制面板"""
         layout = QVBoxLayout()
+        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # 窗口选择
         window_group = QGroupBox("窗口选择")
         window_layout = QVBoxLayout()
 
         self.window_combo = QComboBox()
-        self.window_combo.setMinimumHeight(24)
+        # self.window_combo.setMinimumHeight(24)
         refresh_btn = QPushButton("刷新窗口列表")
         refresh_btn.clicked.connect(self.refresh_windows)
         window_layout.addWidget(refresh_btn)
@@ -735,6 +138,7 @@ class PokerOCRWindow(QMainWindow):
         window_layout.addWidget(self.window_combo)
 
         window_group.setLayout(window_layout)
+        window_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(window_group)
 
         # 扫描设置
@@ -748,6 +152,7 @@ class PokerOCRWindow(QMainWindow):
         scan_layout.addWidget(self.interval_spin)
 
         scan_group.setLayout(scan_layout)
+        scan_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(scan_group)
 
         # 编辑区域
@@ -771,10 +176,14 @@ class PokerOCRWindow(QMainWindow):
         edit_layout.addWidget(self.board_btn)
 
         edit_group.setLayout(edit_layout)
+        edit_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(edit_group)
 
         # 控制按钮
-        button_layout = QVBoxLayout()
+        button_widget = QWidget()
+        button_layout = QVBoxLayout(button_widget)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(4)
 
         self.start_btn = QPushButton("▶ 开始")
         self.start_btn.setProperty("startButton", "true")
@@ -795,39 +204,37 @@ class PokerOCRWindow(QMainWindow):
         self.train_btn.clicked.connect(self.run_training)
         button_layout.addWidget(self.train_btn)
 
-        layout.addLayout(button_layout)
+        button_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        layout.addWidget(button_widget)
 
         # 配置说明
-        info_group = QGroupBox("使用说明")
-        info_layout = QVBoxLayout()
-        info_text = QLabel(
-            """
-注意：首次使用需要安装<a href='https://github.com/tesseract-ocr/tesseract'>Tesseract OCR引擎</a>
-        """
-        )
-        info_text.setWordWrap(True)
-        info_layout.addWidget(info_text)
-        info_text.setOpenExternalLinks(True)
+        # 获取 Tesseract 版本信息
         try:
             tesseract_version = subprocess.check_output(["tesseract", "--version"], encoding="utf8").strip().splitlines()[0]
-            info_layout.addWidget(QLabel(f"Tesseract版本: {tesseract_version}"))
+            tesseract_status = f"<span style='color: #00d4aa;'>✓ {tesseract_version}</span>"
         except Exception as e:
-            info_layout.addWidget(QLabel(f"并且添加到环境PATH，然后训练模型"))
-            not_install = QLabel(f"Tesseract OCR引擎 未找到\n{e}")
-            not_install.setObjectName("errorLabel")
-            info_layout.addWidget(not_install)
-
-        info_layout.addWidget(
-            QLabel(
-                """
-可根据 assets/images 中的资源训练模型，以提高精确度
-        """
-            )
+            tesseract_status = f"<span style='color: #ff6b6b;'>✗ 未找到，需安装并添加到环境PATH</span>"
+        scroll_area = QScrollArea()
+        scroll_area.setMinimumHeight(120)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        info_text = QLabel(
+            f"""
+<b>引擎状态</b><br>
+{tesseract_status}<br>
+首次使用需要安装 <a href='https://github.com/tesseract-ocr/tesseract' style='color: #4dabf7; text-decoration: none;'>Tesseract OCR 引擎</a><br><br>
+可根据 assets/images 中的样本图片训练自定义模型，以提高识别精确度<br><br>
+例如有无法识别的卡牌，使用游戏录像工具截图，并裁剪图片加入训练
+"""
         )
-        info_group.setLayout(info_layout)
-        layout.addWidget(info_group)
+        info_text.setWordWrap(True)
+        info_text.setOpenExternalLinks(True)
+        info_text.setTextFormat(Qt.TextFormat.RichText)
+        info_text.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll_area.setWidget(info_text)
 
-        layout.addStretch()
+        layout.addWidget(scroll_area, 1)
         return layout
 
     def create_result_panel(self):
@@ -835,7 +242,7 @@ class PokerOCRWindow(QMainWindow):
         layout = QVBoxLayout()
 
         # 牌池区域
-        board_group = QGroupBox("牌池 (Board Cards)")
+        board_group = QGroupBox("牌池")
         board_layout = QHBoxLayout()
 
         self.board_labels = []
@@ -845,18 +252,20 @@ class PokerOCRWindow(QMainWindow):
             board_layout.addWidget(label)
 
         board_group.setLayout(board_layout)
+        board_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(board_group)
 
         # 手牌区域
-        hand_group = QGroupBox("手牌 (Hole Cards)")
+        hand_group = QGroupBox("手牌")
         hand_layout = QHBoxLayout()
 
-        self.card1_label = self.create_card_label("手牌 1")
-        self.card2_label = self.create_card_label("手牌 2")
-
-        hand_layout.addWidget(self.card1_label)
-        hand_layout.addWidget(self.card2_label)
+        self.hand_card_lables = []
+        for i in range(2):
+            card = self.create_card_label(f"手牌 {i+1}")
+            self.hand_card_lables.append(card)
+            hand_layout.addWidget(card)
         hand_group.setLayout(hand_layout)
+        hand_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(hand_group)
 
         # 历史记录
@@ -865,11 +274,12 @@ class PokerOCRWindow(QMainWindow):
 
         self.history_text = QTextEdit()
         self.history_text.setReadOnly(True)
-        self.history_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.history_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         history_layout.addWidget(self.history_text)
 
         history_group.setLayout(history_layout)
-        layout.addWidget(history_group)
+        history_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        layout.addWidget(history_group, 1)
 
         return layout
 
@@ -878,7 +288,6 @@ class PokerOCRWindow(QMainWindow):
         label = QLabel("")
         label.setObjectName("cardLabel")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setMinimumSize(50, 65)
         return label
 
     def refresh_windows(self):
@@ -1043,50 +452,54 @@ class PokerOCRWindow(QMainWindow):
             return "10"
         return c
 
+    def get_suit_color(self, suit: str) -> str:
+        """获取花色颜色类别: black(黑桃/梅花) 或 red(红桃/方片)"""
+        if suit in ("H", "D"):  # 红桃、方片
+            return "red"
+        return "black"  # 黑桃、梅花或其他
+
     def update_result(self, result):
         """更新识别结果"""
 
         # 更新手牌
-        hand_cards = result.get("hand_cards", [])
-        if len(hand_cards) >= 1:
-            if hand_cards[0]:
-                self.card1_label.setText(f"{self.cardToText(hand_cards[0][0])}{self.cardToText(hand_cards[0][1])}")
-                self.card1_label.setProperty("handCardActive", "true")
-                self.card1_label.setProperty("handCardInactive", "")
-            else:
-                self.card1_label.setText("")
-                self.card1_label.setProperty("handCardActive", "")
-                self.card1_label.setProperty("handCardInactive", "true")
-            refresh_style(self.card1_label)
+        hand_cards = result.hand_cards
+        if hand_cards:
+            for i in range(len(self.hand_card_lables)):
+                card_label = self.hand_card_lables[i]
 
-        if len(hand_cards) >= 2:
-            if hand_cards[1]:
-                self.card2_label.setText(f"{self.cardToText(hand_cards[1][0])}{self.cardToText(hand_cards[1][1])}")
-                self.card2_label.setProperty("handCardActive", "true")
-                self.card2_label.setProperty("handCardInactive", "")
-            else:
-                self.card2_label.setText("")
-                self.card2_label.setProperty("handCardActive", "")
-                self.card2_label.setProperty("handCardInactive", "true")
-            refresh_style(self.card2_label)
+                if len(hand_cards) > i:
+                    suit, rank = hand_cards[i]
+                    card_label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
+                    card_label.setProperty("handCardActive", "true")
+                    card_label.setProperty("handCardInactive", "")
+                    card_label.setProperty("suitColor", self.get_suit_color(suit))
+                else:
+                    card_label.setText("")
+                    card_label.setProperty("handCardActive", "")
+                    card_label.setProperty("handCardInactive", "true")
+                    card_label.setProperty("suitColor", "")
+                self.refresh_style(card_label)
 
         # 更新牌池
-        board_cards = result.get("board_cards", [])
+        board_cards = result.board_cards
         for i, label in enumerate(self.board_labels):
-            if i < len(board_cards) and board_cards[i]:
-                label.setText(f"{self.cardToText(board_cards[i][0])}{self.cardToText(board_cards[i][1])}")
+            if board_cards and i < len(board_cards) and board_cards[i]:
+                suit, rank = board_cards[i]
+                label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
                 label.setProperty("boardCardActive", "true")
                 label.setProperty("boardCardInactive", "")
+                label.setProperty("suitColor", self.get_suit_color(suit))
             else:
                 label.setText("")
                 label.setProperty("boardCardActive", "")
                 label.setProperty("boardCardInactive", "true")
-            refresh_style(label)
+                label.setProperty("suitColor", "")
+            self.refresh_style(label)
 
         # 添加历史记录
         hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
         board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
-        history_line = f'{result["timestamp"]} - 手牌: {hand_str} | 牌池: {board_str}'
+        history_line = f"手牌: {hand_str} | 牌池: {board_str}"
         if False:
             self.history_text.append(history_line)
 
@@ -1179,6 +592,22 @@ class PokerOCRWindow(QMainWindow):
         """窗口激活事件"""
         self.refresh_windows()
         event.accept()
+
+
+def load_stylesheet(app, qss_file_path="styles/style.qss"):
+    """从 QSS 文件加载样式表"""
+    try:
+        # 获取脚本所在目录的绝对路径
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(script_dir, qss_file_path)
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+        print(f"样式表已加载: {full_path}")
+    except FileNotFoundError:
+        print(f"样式文件不存在: {qss_file_path}")
+    except Exception as e:
+        print(f"加载样式失败: {e}")
 
 
 def main():

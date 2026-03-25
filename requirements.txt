@@ -8,3 +8,4 @@ pydirectinput
 pygetwindow
 mss
 pyyaml
+PySide6

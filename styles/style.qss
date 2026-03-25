@@ -253,11 +253,22 @@ QLabel#cardLabel {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #1a1a2e, stop:1 #0f0f1a);
     border: 1px solid #2d2d44;
-    border-radius: 8px;
+    border-radius: 4px;
     font-size: 18px;
     font-weight: bold;
-    color: #a0a0b0;
     padding: 4px;
+    
+}
+
+/* ==================== 花色颜色 ==================== */
+/* 黑色花色：黑桃(S)、梅花(C) - 默认白色 */
+QLabel[suitColor="black"] {
+    color: #ffffff !important;
+}
+
+/* 红色花色：红桃(H)、方片(D) */
+QLabel[suitColor="red"] {
+    color: #ff4444 !important;
 }
 
 /* ==================== 手牌高亮样式（绿色） ==================== */
@@ -265,10 +276,9 @@ QLabel[handCardActive="true"] {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #00d4aa, stop:1 #00a884);
     border: 1px solid #5cedd0;
-    border-radius: 8px;
+    border-radius: 4px;
     font-size: 18px;
     font-weight: bold;
-    color: #ffffff;
     padding: 4px;
 }
 
@@ -280,7 +290,6 @@ QLabel[handCardInactive="true"] {
     border-radius: 8px;
     font-size: 18px;
     font-weight: bold;
-    color: #a0a0b0;
     padding: 4px;
 }
 
@@ -292,7 +301,6 @@ QLabel[boardCardActive="true"] {
     border-radius: 8px;
     font-size: 18px;
     font-weight: bold;
-    color: #ffffff;
     padding: 4px;
 }
 
@@ -304,7 +312,6 @@ QLabel[boardCardInactive="true"] {
     border-radius: 8px;
     font-size: 18px;
     font-weight: bold;
-    color: #a0a0b0;
     padding: 4px;
 }
 
@@ -312,4 +319,72 @@ QLabel[boardCardInactive="true"] {
 QLabel#errorLabel {
     color: #ff6b6b;
     font-weight: bold;
+}
+
+/* ==================== 滚动区域 ==================== */
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+
+/* 滚动条整体 */
+QScrollBar:vertical {
+    background-color: #1a1a2e;
+    width: 8px;
+    border-radius: 4px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #6c5ce7;
+    min-height: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #a29bfe;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+/* 水平滚动条 */
+QScrollBar:horizontal {
+    background-color: #1a1a2e;
+    height: 8px;
+    border-radius: 4px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #6c5ce7;
+    min-width: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #a29bfe;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: none;
 }
