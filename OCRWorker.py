@@ -35,8 +35,7 @@ class OCRWorker(threading.Thread):
         """单次扫描"""
         self.running = True
         os.makedirs("screenshot", exist_ok=True)
-        # 将窗口置于前端
-        win32gui.SetForegroundWindow(self.hwnd)
+
         time.sleep(0.5)  # 等待窗口切换
 
         try:

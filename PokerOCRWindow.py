@@ -49,17 +49,17 @@ class PokerOCRWindow(QMainWindow):
         self.worker = None
         self.window_list = []
         self.current_hwnd = None
-        
+
         # 初始化牌型评估器
         self.hand_evaluator = CardEvaluator(self)
         self.hand_evaluator.evaluation_completed.connect(self.on_evaluation_completed)
-        
+
         # 扫描定时器
         self.scan_timer = QTimer(self)
         self.scan_timer.timeout.connect(self.do_single_scan)
         self.is_scanning = False  # 是否正在扫描中
         self.evaluation_pending = False  # 是否有待处理的评估
-        
+
         self.init_ui()
 
     def load_config(self):
@@ -378,16 +378,18 @@ class PokerOCRWindow(QMainWindow):
         st_bar = self.statusBar()
         if st_bar:
             st_bar.showMessage("扫描中...")
-        
+
         # 开始扫描
         self.is_scanning = True
+        # 将窗口置于前端
+        win32gui.SetForegroundWindow(self.current_hwnd)
         self.do_single_scan()
 
     def do_single_scan(self):
         """执行单次扫描"""
         if not self.is_scanning:
             return
-        
+
         # 创建并启动工作线程
         self.worker = OCRWorker(self.config)
         self.worker.hwnd = self.current_hwnd or 0
@@ -400,11 +402,11 @@ class PokerOCRWindow(QMainWindow):
         self.is_scanning = False
         self.scan_timer.stop()
         self.evaluation_pending = False
-        
+
         if self.worker:
             self.worker.stop()
             self.worker = None
-        
+
         # 停止评估
         self.hand_evaluator.stop()
 
@@ -512,51 +514,52 @@ class PokerOCRWindow(QMainWindow):
         """牌型评估完成回调"""
         # 更新我的牌型
         self.hand_rank_label.setText(f"我的牌型: {my_hand}")
-        
+
         # 更新我可能牌型
         self.my_possible_label.setText(f"我可能牌型:\n{my_possible}")
-        
+
         # 更新对手可能牌型
         self.opponent_label.setText(f"对手可能牌型:\n{opponent}")
-        
+
         # 添加历史记录
         self.history_text.append(f"[{my_hand}] {history_text}")
-        
+
         # 滚动到底部
         scroll_bar = self.history_text.verticalScrollBar()
         if scroll_bar:
             scroll_bar.setValue(scroll_bar.maximum())
-        
+
         # 评估完成，调度下一次扫描
         self.evaluation_pending = False
         self.schedule_next_scan()
-    
+
     def schedule_next_scan(self):
         """调度下一次扫描"""
         if self.is_scanning and not self.evaluation_pending:
             interval = self.config.get("scan_interval", 200)
             self.scan_timer.start(interval)
-    
+
     def closeEvent(self, event):
         """窗口关闭事件，清理资源"""
         # 停止扫描
         self.is_scanning = False
         self.scan_timer.stop()
-        
+
         # 停止OCR工作线程
         if self.worker:
             self.worker.stop()
             self.worker = None
-        
+
         # 清理牌型评估器
         if self.hand_evaluator:
             self.hand_evaluator.cleanup()
-        
+
         event.accept()
 
     def update_result(self, result):
         """更新识别结果"""
 
+        print(str(result).replace("Namespace", ""))
         # 更新手牌
         hand_cards = result.hand_cards or []
         for i in range(len(self.hand_card_lables)):
@@ -597,14 +600,14 @@ class PokerOCRWindow(QMainWindow):
         self.last_result_key = result_key
 
         # 计算牌型：结果变化 + 有手牌 + 有3张以上池牌
-        valid_hand = len([c for c in hand_cards if c]) >= 2
-        valid_board = len([c for c in board_cards if c]) >= 3
+        valid_hand = len([c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 2
+        valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 3
 
         if result_changed and valid_hand and valid_board:
             # 准备历史记录文本
-            hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
-            board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
-            
+            hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
+            board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
+
             # 异步评估牌型
             self.evaluation_pending = True
             self.hand_evaluator.start_evaluation(hand_cards, board_cards, f"手牌: {hand_str} | 牌池: {board_str}")
