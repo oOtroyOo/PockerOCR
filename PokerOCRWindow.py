@@ -32,6 +32,7 @@ import mss
 
 from OCRWorker import OCRWorker
 from RegionEditorDialog import RegionEditorDialog
+from CardEvaluator import CardEvaluator
 
 
 class PokerOCRWindow(QMainWindow):
@@ -48,6 +49,11 @@ class PokerOCRWindow(QMainWindow):
         self.worker = None
         self.window_list = []
         self.current_hwnd = None
+        
+        # 初始化牌型评估器
+        self.hand_evaluator = CardEvaluator(self)
+        self.hand_evaluator.evaluation_completed.connect(self.on_evaluation_completed)
+        
         self.init_ui()
 
     def load_config(self):
@@ -261,6 +267,16 @@ class PokerOCRWindow(QMainWindow):
         hand_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(hand_group)
 
+        # 牌型显示
+        self.hand_rank_label = QLabel("牌型: --")
+        self.hand_rank_label.setObjectName("handRankLabel")
+        self.hand_rank_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hand_rank_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.hand_rank_label)
+
+        # 上一次结果缓存
+        self.last_result_key = None
+
         # 历史记录
         history_group = QGroupBox("程序输出")
         history_layout = QVBoxLayout()
@@ -451,30 +467,52 @@ class PokerOCRWindow(QMainWindow):
             return "red"
         return "black"  # 黑桃、梅花或其他
 
+    def on_evaluation_completed(self, hand_rank: str, history_text: str):
+        """牌型评估完成回调"""
+        self.hand_rank_label.setText(f"牌型: {hand_rank}")
+        self.history_text.append(f"[{hand_rank}] {history_text}")
+        
+        # 滚动到底部
+        scroll_bar = self.history_text.verticalScrollBar()
+        if scroll_bar:
+            scroll_bar.setValue(scroll_bar.maximum())
+    
+    def closeEvent(self, event):
+        """窗口关闭事件，清理资源"""
+        # 停止OCR工作线程
+        if self.worker:
+            self.worker.stop()
+            self.worker = None
+        
+        # 清理牌型评估器
+        if self.hand_evaluator:
+            self.hand_evaluator.cleanup()
+        
+        event.accept()
+
     def update_result(self, result):
         """更新识别结果"""
 
         # 更新手牌
-        hand_cards = result.hand_cards
-        if hand_cards:
-            for i in range(len(self.hand_card_lables)):
-                card_label = self.hand_card_lables[i]
+        hand_cards = result.hand_cards or []
+        for i in range(len(self.hand_card_lables)):
+            card_label = self.hand_card_lables[i]
 
-                if len(hand_cards) > i:
-                    suit, rank = hand_cards[i]
-                    card_label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
-                    card_label.setProperty("handCardActive", "true")
-                    card_label.setProperty("handCardInactive", "")
-                    card_label.setProperty("suitColor", self.get_suit_color(suit))
-                else:
-                    card_label.setText("")
-                    card_label.setProperty("handCardActive", "")
-                    card_label.setProperty("handCardInactive", "true")
-                    card_label.setProperty("suitColor", "")
-                self.refresh_style(card_label)
+            if len(hand_cards) > i and hand_cards[i]:
+                suit, rank = hand_cards[i]
+                card_label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
+                card_label.setProperty("handCardActive", "true")
+                card_label.setProperty("handCardInactive", "")
+                card_label.setProperty("suitColor", self.get_suit_color(suit))
+            else:
+                card_label.setText("")
+                card_label.setProperty("handCardActive", "")
+                card_label.setProperty("handCardInactive", "true")
+                card_label.setProperty("suitColor", "")
+            self.refresh_style(card_label)
 
         # 更新牌池
-        board_cards = result.board_cards
+        board_cards = result.board_cards or []
         for i, label in enumerate(self.board_labels):
             if board_cards and i < len(board_cards) and board_cards[i]:
                 suit, rank = board_cards[i]
@@ -489,17 +527,22 @@ class PokerOCRWindow(QMainWindow):
                 label.setProperty("suitColor", "")
             self.refresh_style(label)
 
-        # 添加历史记录
-        hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
-        board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
-        history_line = f"手牌: {hand_str} | 牌池: {board_str}"
-        if False:
-            self.history_text.append(history_line)
+        # 生成结果 key 用于检测变化
+        result_key = str(hand_cards) + str(board_cards)
+        result_changed = result_key != self.last_result_key
+        self.last_result_key = result_key
 
-        # 限制历史记录数量
-        scroll_bar = self.history_text.verticalScrollBar()
-        if scroll_bar:
-            scroll_bar.setValue(scroll_bar.maximum())
+        # 计算牌型：结果变化 + 有手牌 + 有3张以上池牌
+        valid_hand = len([c for c in hand_cards if c]) >= 2
+        valid_board = len([c for c in board_cards if c]) >= 3
+
+        if result_changed and valid_hand and valid_board:
+            # 准备历史记录文本
+            hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in hand_cards])
+            board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c else "??" for c in board_cards])
+            
+            # 异步评估牌型
+            self.hand_evaluator.start_evaluation(hand_cards, board_cards, f"手牌: {hand_str} | 牌池: {board_str}")
 
     def handle_error(self, error_msg):
         """处理错误"""
@@ -574,12 +617,6 @@ class PokerOCRWindow(QMainWindow):
                 yaml.safe_dump(config, f, allow_unicode=True, default_flow_style=False)
         except Exception as e:
             QMessageBox.warning(self, "警告", f"保存配置失败: {str(e)}")
-
-    def closeEvent(self, event):
-        """关闭事件"""
-        if self.worker:
-            self.worker.stop()
-        event.accept()
 
     def showEvent(self, event):
         """窗口激活事件"""
