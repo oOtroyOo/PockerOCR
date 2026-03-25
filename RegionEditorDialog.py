@@ -1,4 +1,3 @@
-
 import cv2
 from PyQt5.QtWidgets import (
     QVBoxLayout,
@@ -13,6 +12,10 @@ from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPolygonF
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 import typing
+from win32 import win32gui, win32print
+from win32.lib import win32con
+from win32.win32api import GetSystemMetrics
+
 
 class RegionEditorDialog(QDialog):
     """区域编辑对话框"""
@@ -20,7 +23,13 @@ class RegionEditorDialog(QDialog):
     def __init__(self, parent, image, current_config, region_key, region_name):
         super().__init__(parent)
         h, w = image.shape[:2]
-
+        # 剔除Windows标题栏
+        title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
+        border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
+        border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
+        # 调整窗口区域，只截取客户区
+        image = image[title_bar_height + border_height : h - border_height, border_width : w - border_width]
+        h, w = image.shape[:2]
         # 转换为QPixmap
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         qt_image = QImage(rgb_image.data, w, h, 3 * w, QImage.Format.Format_RGB888)
@@ -332,8 +341,9 @@ class RegionEditorDialog(QDialog):
         region_dict = {
             "pos": [round(self.region["x"], 2), round(self.region["y"], 2)],
             "size": [round(self.region["w"], 2), round(self.region["h"], 2)],
-            "r": round(self.region["r"], 2),
         }
+        if "r" in self.region:
+            region_dict["r"] = round(self.region["r"], 2)
         if self.region_key == "card1":
             if "hand_cards" not in self.current_config:
                 self.current_config["hand_cards"] = {}
@@ -404,4 +414,3 @@ class ClickableLabel(QLabel):
         self.is_dragging = False
         if was_dragging and self.release_callback:
             self.release_callback(event)
-

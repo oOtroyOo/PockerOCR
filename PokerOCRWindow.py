@@ -281,18 +281,21 @@ class PokerOCRWindow(QMainWindow):
         # 我的牌型
         self.hand_rank_label = QLabel("我的牌型: --")
         self.hand_rank_label.setObjectName("handRankLabel")
+        self.hand_rank_label.setTextFormat(Qt.TextFormat.RichText)
         analysis_layout.addWidget(self.hand_rank_label)
 
         # 我可能牌型
         self.my_possible_label = QLabel("我可能牌型: --")
         self.my_possible_label.setObjectName("myPossibleLabel")
         self.my_possible_label.setWordWrap(True)
+        self.my_possible_label.setTextFormat(Qt.TextFormat.RichText)
         analysis_layout.addWidget(self.my_possible_label)
 
         # 对手可能牌型
         self.opponent_label = QLabel("对手可能牌型: --")
         self.opponent_label.setObjectName("opponentLabel")
         self.opponent_label.setWordWrap(True)
+        self.opponent_label.setTextFormat(Qt.TextFormat.RichText)
         analysis_layout.addWidget(self.opponent_label)
 
         analysis_group.setLayout(analysis_layout)
@@ -559,7 +562,7 @@ class PokerOCRWindow(QMainWindow):
     def update_result(self, result):
         """更新识别结果"""
 
-        print(str(result).replace("Namespace", ""))
+        # print(str(result).replace("Namespace", ""))
         # 更新手牌
         hand_cards = result.hand_cards or []
         for i in range(len(self.hand_card_lables)):

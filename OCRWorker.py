@@ -1,4 +1,3 @@
-
 from argparse import Namespace
 import os
 import time
@@ -6,11 +5,14 @@ import threading
 import cv2
 import numpy as np
 from PyQt5.QtCore import pyqtSignal, QObject
-import win32gui
 import pytesseract
 import mss
+from win32 import win32gui, win32print
+from win32.lib import win32con
+from win32.win32api import GetSystemMetrics
 
 screenshot_debug_img = os.path.exists("screenshot")
+
 
 class WorkerSignals(QObject):
     """工作线程信号"""
@@ -73,6 +75,14 @@ class OCRWorker(threading.Thread):
             # 转换BGRA到BGR
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
+            # 剔除Windows标题栏
+            title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
+            border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
+            border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
+
+            # 调整窗口区域，只截取客户区
+            img = img[title_bar_height + border_height : height - border_height, border_width : width - border_width]
+
             # 保存调试图像
             if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/screenshot.png", img)
@@ -93,8 +103,8 @@ class OCRWorker(threading.Thread):
         hand1_pos = self.config["hand_cards"]["card1"]
         hand2_pos = self.config["hand_cards"]["card2"]
 
-        card1 = self.crop_and_ocr(image, hand1_pos, w, h)
-        card2 = self.crop_and_ocr(image, hand2_pos, w, h)
+        card1 = self.crop_and_ocr(image, hand1_pos, "card1")
+        card2 = self.crop_and_ocr(image, hand2_pos, "card2")
 
         result.hand_cards = [
             card1,
@@ -130,13 +140,13 @@ class OCRWorker(threading.Thread):
 
         return result
 
-    def crop_and_ocr(self, image, pos, w, h):
+    def crop_and_ocr(self, image, pos, name):
         """裁剪并OCR识别"""
         # pos 格式: {"pos": [x, y], "size": [w, h], "r": rotation}
         pos_list = pos.get("pos", [0, 0])
         size_list = pos.get("size", [0, 0])
         rotation = pos.get("r", 0)
-
+        h, w = image.shape[:2]
         x = int(pos_list[0] * w)
         y = int(pos_list[1] * h)
         pw = int(size_list[0] * w)
@@ -155,7 +165,7 @@ class OCRWorker(threading.Thread):
 
         # 保存原始图像到本地
         if screenshot_debug_img:
-            cv2.imwrite(f"screenshot/capture_{pos_list}.png", cropped)
+            cv2.imwrite(f"screenshot/capture_{name}.png", cropped)
         return self.ocr_image(cropped)
 
     def ocr_image(self, image):
@@ -206,4 +216,3 @@ class OCRWorker(threading.Thread):
     def stop(self):
         """停止扫描"""
         self.running = False
-
