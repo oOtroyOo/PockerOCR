@@ -20,27 +20,26 @@ class ManualChooseDialog(QDialog):
 
         layout = QVBoxLayout()
 
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        board_layout = QHBoxLayout()
-        board_layout.addStretch(0)
-        board_layout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        combo_layout = QHBoxLayout()
+        combo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.hand_card_lables: list[QLabel] = []
         for i in range(2):
             card = self.create_card_label()
             self.hand_card_lables.append(card)
-            board_layout.addWidget(card)
-        board_layout.addSpacing(30)
+            combo_layout.addWidget(card)
+        combo_layout.addSpacing(30)
 
         self.board_labels: list[QLabel] = []
         for i in range(5):
             label = self.create_card_label()
             self.board_labels.append(label)
-            board_layout.addWidget(label)
+            combo_layout.addWidget(label)
 
-        layout.addLayout(board_layout)
+        layout.addLayout(combo_layout)
 
         # 说明
-        layout_group = QGroupBox("使用鼠标 左键选择手牌，右键选择河牌")
+        layout_group = QLabel("使用鼠标 左键选择手牌，右键选择河牌")
         layout.addWidget(layout_group)
 
         suits_layout = QHBoxLayout()
@@ -51,7 +50,7 @@ class ManualChooseDialog(QDialog):
             suits_layout.addWidget(section)
             self.suit_sections.append(section)
 
-        layout_group.setLayout(suits_layout)
+        layout.addLayout(suits_layout)
 
         # 快速操作按钮
         quick_layout = QHBoxLayout()
