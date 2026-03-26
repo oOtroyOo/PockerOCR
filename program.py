@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 
-from PokerOCRWindow import PokerOCRWindow
+from Source.PokerOCRWindow.PokerOCRWindow import PokerOCRWindow
 
 
 def load_stylesheet(app, qss_file_path="styles/style.qss"):

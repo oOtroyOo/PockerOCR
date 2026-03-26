@@ -159,6 +159,35 @@ QPushButton[trainButton="true"]:disabled {
     border-color: #2d2d44;
 }
 
+/* ==================== 自选牌型按钮 ==================== */
+QPushButton[manualButton="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #4dabf7, stop:1 #228be6);
+    color: #0a0a0f;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid #74c0fc;
+    padding: 4px;
+    min-height: 28px;
+}
+
+QPushButton[manualButton="true"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #74c0fc, stop:1 #4dabf7);
+    border-color: #a5d8ff;
+}
+
+QPushButton[manualButton="true"]:pressed {
+    background: #1971c2;
+}
+
+QPushButton[manualButton="true"]:disabled {
+    background-color: #1a1a2e;
+    color: #4a4a60;
+    border-color: #2d2d44;
+}
+
 /* ==================== 编辑区域按钮 ==================== */
 QPushButton[editButton="true"] {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -418,3 +447,32 @@ QLabel#possibleLabel {
     font-family: 'Monaco'，"Consolas", "Courier New", monospace;
 }
 
+CardButton {
+    font-size: 14px;
+    padding: 4px;
+    font-weight: bold;
+    font-family: 'Monaco'，"Consolas", "Courier New", monospace;
+    background-color: #1a2e1d;
+    border: 2px solid #2d2d44;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+CardButton[selected="hand"] {
+    background-color: #24e079;
+}
+
+CardButton[selected="board"] {
+    background-color: #2aaadd;
+}
+
+/* 黑色花色：黑桃(S)、梅花(C) - 默认白色 */
+CardButton[suitColor="black"] {
+    color: #ffffff !important;
+}
+
+/* 红色花色：红桃(H)、方片(D) */
+CardButton[suitColor="red"] {
+    color: #ff4444 !important;
+}

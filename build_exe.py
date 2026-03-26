@@ -34,7 +34,7 @@ def build_exe():
     os.makedirs("dist/PokerOCR/assets", exist_ok=True)
 
     # 运行 PyInstaller
-    cmd = [sys.executable, "-m", "PyInstaller", "--clean", "--noconfirm", "poker_ocr.spec"]
+    cmd = [sys.executable, "-m", "PyInstaller", "--clean", "--noconfirm", "program.spec"]
 
     result = subprocess.run(cmd, capture_output=False)
 

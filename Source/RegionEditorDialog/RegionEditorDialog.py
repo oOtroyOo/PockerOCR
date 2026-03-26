@@ -15,7 +15,7 @@ import typing
 from win32 import win32gui, win32print
 from win32.lib import win32con
 from win32.win32api import GetSystemMetrics
-
+import Source.defines as defines
 
 class RegionEditorDialog(QDialog):
     """区域编辑对话框"""

@@ -2,12 +2,14 @@
 扑克OCR应用程序
 功能：窗口捕获、间隔扫描、识别手牌和牌池
 """
-
+import Source.defines as defines
+from argparse import Namespace
 import os
 import time
 import threading
 import cv2
 import numpy as np
+import requests
 from PyQt5.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -24,15 +26,18 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QScrollArea,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QUrl
 import win32gui
 import yaml
 import subprocess
 import mss
 
-from OCRWorker import OCRWorker
-from RegionEditorDialog import RegionEditorDialog
-from CardEvaluator import CardEvaluator
+from Source.Model.OCRWorker import OCRWorker
+from Source.RegionEditorDialog.RegionEditorDialog import RegionEditorDialog
+from Source.Model.CardEvaluator import CardEvaluator
+from Source.ManualChooseDialog.ManualChooseDialog import ManualChooseDialog
+
 
 
 class PokerOCRWindow(QMainWindow):
@@ -202,6 +207,11 @@ class PokerOCRWindow(QMainWindow):
         self.stop_btn.clicked.connect(self.stop_scan)
         button_layout.addWidget(self.stop_btn)
 
+        self.manual_btn = QPushButton("👆 自选牌型")
+        self.manual_btn.setProperty("manualButton", "true")
+        self.manual_btn.clicked.connect(self.manual_choose)
+        button_layout.addWidget(self.manual_btn)
+
         # 训练按钮
         self.train_btn = QPushButton("🎯 训练")
         self.train_btn.setProperty("trainButton", "true")
@@ -216,8 +226,10 @@ class PokerOCRWindow(QMainWindow):
         try:
             tesseract_version = subprocess.check_output(["tesseract", "--version"], encoding="utf8").strip().splitlines()[0]
             tesseract_status = f"<span style='color: #00d4aa;'>✓ {tesseract_version}</span>"
+            self.train_btn.setVisible(True)
         except Exception as e:
             tesseract_status = f"<span style='color: #ff6b6b;'>✗ 未找到，需安装并添加到环境PATH</span>"
+            self.train_btn.setVisible(False)
         scroll_area = QScrollArea()
         scroll_area.setMinimumHeight(120)
         scroll_area.setWidgetResizable(True)
@@ -227,19 +239,52 @@ class PokerOCRWindow(QMainWindow):
             f"""
 <b>引擎状态</b><br>
 {tesseract_status}<br>
-首次使用需要安装 <a href='https://github.com/tesseract-ocr/tesseract' style='color: #4dabf7; text-decoration: none;'>Tesseract OCR 引擎</a><br><br>
+首次使用需要安装 <a href='https://github.com/tesseract-ocr/tesseract/releases' style='color: #4dabf7; text-decoration: none;'>Tesseract OCR 引擎</a><br><br>
 可根据 assets/images 中的样本图片训练自定义模型，以提高识别精确度<br><br>
 例如有无法识别的卡牌，使用游戏录像工具截图，并裁剪图片加入训练
 """
         )
         info_text.setWordWrap(True)
         info_text.setOpenExternalLinks(True)
+        # info_text.setOpenExternalLinks(False)
+        # info_text.linkActivated.connect(self.handle_link)
         info_text.setTextFormat(Qt.TextFormat.RichText)
         info_text.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll_area.setWidget(info_text)
 
         layout.addWidget(scroll_area, 1)
         return layout
+
+    def handle_link(self, link_value):
+
+        try:
+            # 从config.yaml获取仓库信息，默认为当前项目
+            repo_owner = "tesseract-ocr"
+            repo_name = "tesserac"
+
+            # 调用GitHub API获取最新release
+            url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            release_data = response.json()
+
+            # 查找exe文件
+            exe_url = None
+            for asset in release_data.get("assets", []):
+                if asset["name"].endswith(".exe"):
+                    exe_url = asset["browser_download_url"]
+                    break
+
+            if exe_url:
+                QDesktopServices.openUrl(exe_url)
+            else:
+                QMessageBox.warning(self, "提示", "未找到可执行文件(.exe)")
+
+        except requests.exceptions.RequestException as e:
+            QMessageBox.critical(self, "错误", f"网络请求失败: {str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"发生错误: {str(e)}")
 
     def create_result_panel(self):
         """创建结果显示面板"""
@@ -444,6 +489,19 @@ class PokerOCRWindow(QMainWindow):
             st_bar.showMessage("扫描已停止")
         self.last_result_key = None
 
+    def manual_choose(self):
+        """手动选择牌型并分析"""
+
+        # 打开手动选择对话框
+        dialog = ManualChooseDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 获取选中的牌
+            hand_cards, board_cards = dialog.get_selected_cards()
+            result = Namespace(hand_cards=hand_cards, board_cards=board_cards)
+            # 启动牌型评估
+            self.evaluation_pending = True
+            self.update_result(result)
+
     def run_training(self):
         """运行Tesseract模型训练"""
         from trainer import train_tesseract_model, create_config_files
@@ -616,7 +674,7 @@ class PokerOCRWindow(QMainWindow):
                 label.setProperty("suitColor", "")
             self.refresh_style(label)
 
-        if self.is_scanning:
+        if self.is_scanning or self.evaluation_pending:
             # 生成结果 key 用于检测变化
             result_key = str(hand_cards) + str(board_cards)
             result_changed = result_key != self.last_result_key
