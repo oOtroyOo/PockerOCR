@@ -60,6 +60,7 @@ class PokerOCRWindow(QMainWindow):
         # 初始化牌型评估器
         self.hand_evaluator = CardEvaluator(self)
         self.hand_evaluator.evaluation_completed.connect(self.on_evaluation_completed)
+        self.hand_evaluator.hand_completed.connect(self.on_hand_completed)
 
         # 扫描定时器
         self.scan_timer = QTimer(self)
@@ -500,10 +501,7 @@ class PokerOCRWindow(QMainWindow):
             hand_cards, board_cards = self.manualChooseDialog.get_selected_cards()
             result = Namespace(hand_cards=list(hand_cards), board_cards=list(board_cards))
             self.last_result_key = None
-            # 显示加载提示
-            self.hand_rank_label.setText("正在分析牌型...")
-            self.my_possible_label.setText("计算中...")
-            self.opponent_label.setText("计算中...")
+
             QApplication.processEvents()  # 刷新UI
 
             # 启动牌型评估
@@ -579,10 +577,15 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage(message)
 
-    def on_evaluation_completed(self, my_hand: str, my_possible: str, opponent: str, history_text: str):
+    def on_hand_completed(self, my_hand):
         """牌型评估完成回调"""
         # 更新我的牌型
+        self.history_text.append(f"[{my_hand}]")
         self.hand_rank_label.setText(f"我的牌型: {my_hand}")
+        QApplication.processEvents()  # 刷新UI
+        
+
+    def on_evaluation_completed(self, my_possible: str, opponent: str, history_text: str):
 
         # 更新我可能牌型
         self.my_possible_label.setText(my_possible)
@@ -591,7 +594,7 @@ class PokerOCRWindow(QMainWindow):
         self.opponent_label.setText(opponent)
 
         # 添加历史记录
-        self.history_text.append(f"[{my_hand}] {history_text}")
+        self.history_text.append(f"{history_text}")
 
         # 滚动到底部
         scroll_bar = self.history_text.verticalScrollBar()
@@ -674,6 +677,10 @@ class PokerOCRWindow(QMainWindow):
             valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 3
 
             if result_changed and valid_hand and valid_board:
+                # 显示加载提示
+                self.hand_rank_label.setText("正在分析牌型...")
+                self.my_possible_label.setText("计算中...")
+                self.opponent_label.setText("计算中...")
                 # 准备历史记录文本
                 hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
                 board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])

@@ -41,7 +41,8 @@ class CardEvaluatorWorker(QObject):
     """牌型评估工作线程"""
 
     # 评估完成信号 (我的牌型, 我可能牌型, 对手可能牌型, 历史记录)
-    evaluation_finished = pyqtSignal(str, str, str, str)
+    evaluation_finished = pyqtSignal(str, str, str)
+    hand_finished = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -60,16 +61,13 @@ class CardEvaluatorWorker(QObject):
             result = self._full_evaluate(hand_cards, board_cards)
 
             if self._is_running:
-                # 格式化我的牌型（牌型名 + 关键牌）
-                my_hand_str = self._format_hand_name(result.my_hand)
-
                 # 格式化我可能的牌型
                 my_possible_str = self._format_possible_hands(result.my_possible)
 
                 # 格式化对手可能的牌型
                 opponent_str = self._format_possible_hands(result.opponent_possible)
 
-                self.evaluation_finished.emit(my_hand_str, my_possible_str, opponent_str, history_text)
+                self.evaluation_finished.emit(my_possible_str, opponent_str, history_text)
         except Exception:
             # 发生异常时发送空结果，避免UI卡死
             if self._is_running:
@@ -132,7 +130,9 @@ class CardEvaluatorWorker(QObject):
 
         # 我的牌型（手牌 + 牌池最佳组合）
         my_hand = self._evaluate_best_hand(all_cards)
-
+        # 格式化我的牌型（牌型名 + 关键牌）
+        my_hand_str = self._format_hand_name(my_hand)
+        self.hand_finished.emit(my_hand_str)
         # 获取我可能和对手可能的牌型
         my_possible, opponent_possible = self._get_all_possible_hands(board_cards, hand_cards, my_hand)
 
@@ -464,7 +464,8 @@ class CardEvaluator(QObject):
     """牌型评估器管理类"""
 
     # 评估完成信号 (我的牌型, 我可能牌型, 对手可能牌型, 历史记录)
-    evaluation_completed = pyqtSignal(str, str, str, str)
+    hand_completed = pyqtSignal(str)
+    evaluation_completed = pyqtSignal(str, str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -480,6 +481,7 @@ class CardEvaluator(QObject):
         self._worker = CardEvaluatorWorker()
         self._worker.moveToThread(self._thread)
 
+        self._worker.hand_finished.connect(lambda my_hand: self.hand_completed.emit(my_hand))
         self._worker.evaluation_finished.connect(self._on_evaluation_finished)
 
         # 使用函数引用而不是 lambda，避免延迟执行
@@ -492,9 +494,9 @@ class CardEvaluator(QObject):
         self._is_running = True
         self._thread.start()
 
-    def _on_evaluation_finished(self, my_hand: str, my_possible: str, opponent: str, history_text: str):
+    def _on_evaluation_finished(self, my_possible: str, opponent: str, history_text: str):
         """评估完成回调"""
-        self.evaluation_completed.emit(my_hand, my_possible, opponent, history_text)
+        self.evaluation_completed.emit(my_possible, opponent, history_text)
         self.stop()
 
     def stop(self):
