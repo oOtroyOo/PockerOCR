@@ -1,11 +1,6 @@
-"""
-手动选择牌型对话框
-用于手动选择手牌和牌池，进行牌型分析
-"""
-
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QGroupBox, QMessageBox, QGridLayout
+﻿from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QGroupBox, QMessageBox, QGridLayout
 from typing import Tuple, List
-
+from PyQt5.QtCore import Qt
 from Source.ManualChooseDialog.CardButton import CardButton
 from Source import defines
 
@@ -15,8 +10,8 @@ class ManualChooseDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.selected_hand: List[Tuple[str, str]] = []  # 手牌
-        self.selected_board: List[Tuple[str, str]] = []  # 牌池
+        self.selected_hand: set[Tuple[str, str]] = set()  # 手牌
+        self.selected_board: set[Tuple[str, str]] = set()  # 牌池
 
         self.setWindowTitle("手动选择牌型")
         # self.resize(900, 700)
@@ -89,41 +84,32 @@ class ManualChooseDialog(QDialog):
     def on_random_btn(self):
         pass
 
-    def on_card_selected(self, card, active=True):
-        pass
-
-    def on_card_deselected(self, card):
-        return self.on_card_selected(card, False)
+    def on_card_selected(self, card, type: Qt.MouseButton, active=True):
+        if type == Qt.MouseButton.LeftButton:
+            if card in self.selected_board:
+                self.selected_board.remove(card)
+            if card in self.selected_hand:
+                self.selected_hand.remove(card)
+            elif len(self.selected_hand) < 2:
+                self.selected_hand.add(card)
+        elif type == Qt.MouseButton.RightButton:
+            if card in self.selected_hand:
+                self.selected_hand.remove(card)
+            if card in self.selected_board:
+                self.selected_board.remove(card)
+            elif len(self.selected_board) < 5:
+                self.selected_board.add(card)
 
     def on_confirm(self):
-        """确认分析"""
-        # 验证手牌
-        hand_valid, hand_msg = self.hand_page.validate()
-        if not hand_valid:
-            QMessageBox.warning(self, "提示", hand_msg)
+        if len(self.selected_hand) < 2 or len(self.selected_board) < 3:
+            QMessageBox.warning(self, "提示", "至少需要 2张手牌 3张河牌")
             return
-
-        # 验证牌池（3-5张）
-        board_cards = self.board_page.get_selected_cards()
-        if len(board_cards) < 3:
-            QMessageBox.warning(self, "提示", "牌池至少需要3张牌才能进行牌型分析！")
-            return
-
-        # 检查重复牌（理论上不应该出现，因为页签会互相禁用）
-        all_cards = self.hand_page.get_selected_cards() + board_cards
-        if len(all_cards) != len(set(all_cards)):
-            QMessageBox.warning(self, "警告", "存在重复的牌，请检查选择！")
-            return
-
-        self.selected_hand = self.hand_page.get_selected_cards()
-        self.selected_board = board_cards
-
         self.accept()
 
     def clear_all(self):
         pass
 
-    def get_selected_cards(self) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    def get_selected_cards(self) -> Tuple[set[Tuple[str, str]], set[Tuple[str, str]]]:
         """获取选中的牌
         Returns:
             (手牌列表, 牌池列表)

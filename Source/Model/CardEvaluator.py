@@ -31,21 +31,9 @@ class EvaluationResult(NamedTuple):
     my_possible: list[tuple[str, list]]  # 我可能的牌型 [(牌型名, 牌组合), ...]
     opponent_possible: list[tuple[str, list]]  # 对手可能的牌型
 
-
-def card_to_str(card: tuple) -> str:
-    """将牌元组转为字符串 (S, A) -> A♠"""
-    if not card or len(card) < 2:
-        return "??"
-    suit, rank = card
-    suit_sym = defines.SUIT_SYMBOLS.get(suit, [])[0]
-    rank_name = defines.RANK_NAMES.get(defines.RANK_ORDER.get(rank, 0), rank)
-
-    return f"<font color={'#ffffff' if (suit =="S" or suit=="C") else '#ff4444'}>{suit_sym}{rank_name}</font>"
-
-
 def cards_to_str(cards: list) -> str:
     """将牌列表转为字符串"""
-    return " ".join(card_to_str(c) for c in cards)
+    return " ".join(defines.cardToStr(c) for c in cards)
 
 
 class CardEvaluatorWorker(QObject):

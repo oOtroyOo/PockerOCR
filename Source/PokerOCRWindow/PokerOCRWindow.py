@@ -2,6 +2,7 @@
 扑克OCR应用程序
 功能：窗口捕获、间隔扫描、识别手牌和牌池
 """
+
 import Source.defines as defines
 from argparse import Namespace
 import os
@@ -39,7 +40,6 @@ from Source.Model.CardEvaluator import CardEvaluator
 from Source.ManualChooseDialog.ManualChooseDialog import ManualChooseDialog
 
 
-
 class PokerOCRWindow(QMainWindow):
     """主窗口"""
 
@@ -54,7 +54,7 @@ class PokerOCRWindow(QMainWindow):
         self.worker = None
         self.window_list = []
         self.current_hwnd = None
-
+        self.manualChooseDialog = ManualChooseDialog(self)
         # 初始化牌型评估器
         self.hand_evaluator = CardEvaluator(self)
         self.hand_evaluator.evaluation_completed.connect(self.on_evaluation_completed)
@@ -493,11 +493,11 @@ class PokerOCRWindow(QMainWindow):
         """手动选择牌型并分析"""
 
         # 打开手动选择对话框
-        dialog = ManualChooseDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        
+        if self.manualChooseDialog.exec() == QDialog.DialogCode.Accepted:
             # 获取选中的牌
-            hand_cards, board_cards = dialog.get_selected_cards()
-            result = Namespace(hand_cards=hand_cards, board_cards=board_cards)
+            hand_cards, board_cards = self.manualChooseDialog.get_selected_cards()
+            result = Namespace(hand_cards=list(hand_cards), board_cards=list(board_cards))
             # 启动牌型评估
             self.evaluation_pending = True
             self.update_result(result)
@@ -571,19 +571,6 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage(message)
 
-    def cardToText(self, c: str):
-        if c == "S":
-            return "♠️"
-        elif c == "H":
-            return "♥️"
-        elif c == "C":
-            return "♣️"
-        elif c == "D":
-            return "♦️"
-        elif c == "T":
-            return "10"
-        return c
-
     def get_suit_color(self, suit: str) -> str:
         """获取花色颜色类别: black(黑桃/梅花) 或 red(红桃/方片)"""
         if suit in ("H", "D"):  # 红桃、方片
@@ -647,7 +634,7 @@ class PokerOCRWindow(QMainWindow):
 
             if len(hand_cards) > i and hand_cards[i]:
                 suit, rank = hand_cards[i]
-                card_label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
+                card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 card_label.setProperty("handCardActive", "true")
                 card_label.setProperty("handCardInactive", "")
                 card_label.setProperty("suitColor", self.get_suit_color(suit))
@@ -663,7 +650,7 @@ class PokerOCRWindow(QMainWindow):
         for i, label in enumerate(self.board_labels):
             if board_cards and i < len(board_cards) and board_cards[i]:
                 suit, rank = board_cards[i]
-                label.setText(f"{self.cardToText(suit)}{self.cardToText(rank)}")
+                label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 label.setProperty("boardCardActive", "true")
                 label.setProperty("boardCardInactive", "")
                 label.setProperty("suitColor", self.get_suit_color(suit))
@@ -686,8 +673,8 @@ class PokerOCRWindow(QMainWindow):
 
             if result_changed and valid_hand and valid_board:
                 # 准备历史记录文本
-                hand_str = " | ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
-                board_str = " ".join([f"{self.cardToText(c[0])}{self.cardToText(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
+                hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
+                board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
 
                 # 异步评估牌型
                 self.evaluation_pending = True

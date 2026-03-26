@@ -31,8 +31,8 @@ QGroupBox {
     background-color: #151520;
     border: 1px solid #2d2d44;
     border-radius: 8px;
-    margin-top: 6px;
-    padding-top: 6px;
+    margin-top: 2px;
+    padding-top: 2px;
     font-weight: bold;
     color: #f0f0f0;
     font-size: 11px;
@@ -457,14 +457,18 @@ CardButton {
     border-radius: 6px;
     font-size: 14px;
     font-weight: bold;
+    min-width :20px;
+    min-height : 25px;
 }
 
-CardButton[selected="hand"] {
-    background-color: #24e079;
+CardButton[choose="hand"] {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #24e079, stop:1 #0e9e39);
 }
 
-CardButton[selected="board"] {
-    background-color: #2aaadd;
+CardButton[choose="board"] {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #42bcf5, stop:1 #1c71df);
 }
 
 /* 黑色花色：黑桃(S)、梅花(C) - 默认白色 */

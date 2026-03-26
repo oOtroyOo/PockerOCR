@@ -22,5 +22,36 @@ SUIT_SYMBOLS = {"S": ("♠", "黑桃", "black"), "C": ("♣", "梅花", "black")
 
 # 所有可能的牌
 all_suits = [x for x in SUIT_SYMBOLS]
-all_ranks =  [x for x in RANK_ORDER]
+all_ranks = [x for x in RANK_ORDER]
 all_ranks.reverse()
+
+
+@staticmethod
+def charToCard(c: str):
+    if c == "S":
+        return "♠️"
+    elif c == "H":
+        return "♥️"
+    elif c == "C":
+        return "♣️"
+    elif c == "D":
+        return "♦️"
+    elif c == "T":
+        return "10"
+    return c
+
+
+@staticmethod
+def cardToStr(card: tuple[str, str]):
+    if not card or len(card) < 2:
+        return "??"
+    suit, rank = card
+    suit_sym = SUIT_SYMBOLS.get(suit, [])[0]
+    rank_name = RANK_NAMES.get(RANK_ORDER.get(rank, 0), rank)
+    return f"{charToCard(suit_sym)}{charToCard(rank_name)}"
+
+
+@staticmethod
+def cardToStrRichFont(card: tuple[str, str]):
+    suit, rank = card
+    return f"<font color={'#ffffff' if (suit =="S" or suit=="C") else '#ff4444'}>{cardToStr(card)}</font>"

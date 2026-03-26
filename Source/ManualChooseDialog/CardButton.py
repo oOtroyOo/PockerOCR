@@ -21,7 +21,7 @@ class CardButton(QPushButton):
         self.suit = suit
         self.rank = rank
         self.card = (suit, rank)
-        self.dialog = parent
+        self.parentDialog = parent
         # 设置按钮文本
         self.setText(f"{defines.SUIT_SYMBOLS[suit][0]}{rank}")
         # self.setFont(QFont("Arial", 12, QFont.Bold))
@@ -32,31 +32,24 @@ class CardButton(QPushButton):
     def update_style(self):
         """更新按钮样式"""
         self.setProperty("suitColor", defines.SUIT_SYMBOLS[self.suit][2])
+        if self.card in self.parentDialog.selected_hand:
+            self.setProperty("choose", "hand")
+        elif self.card in self.parentDialog.selected_board:
+            self.setProperty("choose", "board")
+        else:
+            self.setProperty("choose", None)
 
-    def set_selected(self, selected: bool):
-        """设置选中状态"""
-        self.update_style()
-
-    def set_disabled(self, disabled: bool):
-        """设置禁用状态（已被其他页签选中）"""
-        self.disabled_state = disabled
-        if disabled:
-            self.setChecked(False)
-            self.selected = False
-        self.update_style()
-        self.setEnabled(not disabled)
+        style = self.style()
+        if style:
+            # style.unpolish(self)
+            style.polish(self)
+        self.update()
 
     def mousePressEvent(self, event):
+        print(f"{event.button()}键按下")
         # 左键
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.setProperty("selected", "hand")
-            print("左键按下")
-        elif event.button() == Qt.MouseButton.RightButton:
-            self.setProperty("selected", "board")
-            print("右键按下")
-            # 右键默认不触发 clicked，你可以自己发信号/执行逻辑
-        elif event.button() == Qt.MouseButton.MiddleButton:
-            print("中键按下")
+        if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
+            self.parentDialog.on_card_selected(self.card, event.button())
         self.update_style()
         # super().mousePressEvent(event)
 
