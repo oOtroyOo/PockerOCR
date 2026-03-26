@@ -229,8 +229,16 @@ class CardEvaluatorWorker(QObject):
         for result in opponent_results:
             if result.name not in opponent_possible:
                 opponent_possible[result.name] = []
-            cards_str = cards_to_str(result.cards)
-            if cards_str not in [cards_to_str(c) for c in opponent_possible[result.name]]:
+
+            all_same = False
+            for card_list in opponent_possible[result.name]:
+                if len(card_list) == len(result.cards):
+                    for index in range(len(card_list)):
+                        if card_list[index] == card_list[index]:
+                            if index == len(card_list):
+                                all_same = True
+                            break
+            if not all_same:
                 opponent_possible[result.name].append(result.cards)
 
         # 格式化结果
