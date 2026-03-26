@@ -6,7 +6,7 @@ sys.setrecursionlimit(5000)
 block_cipher = None
 
 a = Analysis(
-    ['poker_ocr.py','PokerOCRWindow.py','RegionEditorDialog.py','OCRWorker.py','CardEvaluator.py'],
+    ['program.py','PokerOCRWindow.py','RegionEditorDialog.py','OCRWorker.py','CardEvaluator.py'],
     pathex=[],
     binaries=[],
     datas=[

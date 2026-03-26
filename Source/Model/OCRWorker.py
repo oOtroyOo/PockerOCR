@@ -47,8 +47,8 @@ class OCRWorker(threading.Thread):
                 if screenshot is not None:
                     # 识别手牌和牌池
                     result = self.recognize_cards(screenshot)
+                    screenshot = None
                     self.signals.result_updated.emit(result)
-
         except Exception as e:
             self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
 
@@ -70,18 +70,18 @@ class OCRWorker(threading.Thread):
             screenshot = sct.grab(monitor)
 
             # 转换为numpy数组（BGRA格式）
-            img = np.array(screenshot)
-
+            img0 = np.array(screenshot)
+            screenshot = None
             # 转换BGRA到BGR
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
+            img1 = cv2.cvtColor(img0, cv2.COLOR_BGRA2BGR)
+            img0 = None
             # 剔除Windows标题栏
             title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
             border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
             border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
-
             # 调整窗口区域，只截取客户区
-            img = img[title_bar_height + border_height : height - border_height, border_width : width - border_width]
+            img = img1[title_bar_height + border_height : height - border_height, border_width : width - border_width]
+            img1 = None
 
             # 保存调试图像
             if screenshot_debug_img:
@@ -136,8 +136,9 @@ class OCRWorker(threading.Thread):
             if screenshot_debug_img:
                 cv2.imwrite(f"screenshot/board_img_{i+1}.png", card_img)
             card_text = self.ocr_image(card_img)
+            card_img = None
             result.board_cards.append(card_text)
-
+        board_region = None
         return result
 
     def crop_and_ocr(self, image, pos, name):
@@ -190,14 +191,15 @@ class OCRWorker(threading.Thread):
             custom_config_number = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
 
             text = pytesseract.image_to_string(binary, lang="poker", config=custom_config_number).strip()
-
+            binary = None
             # 识别花色
             cropped_suit = gray[int(h * delta) : h, 0:w]
-
+            gray = None
             _, binary = cv2.threshold(cropped_suit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             # OCR配置 - 使用本地 poker 模型识别花色
             custom_config_suit = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 10 -c tessedit_char_whitelist=SHCD'
             suit = pytesseract.image_to_string(binary, lang="poker", config=custom_config_suit).strip()
+            binary = None
             if len(text) == 1 and len(suit) == 1:
                 # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
                 if text == "0":
@@ -207,6 +209,8 @@ class OCRWorker(threading.Thread):
                 if screenshot_debug_img:
                     cv2.imwrite(f"screenshot/cropped_num.png", cropped_num)
                     cv2.imwrite(f"screenshot/cropped_suit.png", cropped_suit)
+            cropped_num = None
+            cropped_suit = None
             return ("", "")
 
         except Exception as e:

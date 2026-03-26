@@ -583,7 +583,6 @@ class PokerOCRWindow(QMainWindow):
         self.history_text.append(f"[{my_hand}]")
         self.hand_rank_label.setText(f"我的牌型: {my_hand}")
         QApplication.processEvents()  # 刷新UI
-        
 
     def on_evaluation_completed(self, my_possible: str, opponent: str, history_text: str):
 
@@ -637,7 +636,7 @@ class PokerOCRWindow(QMainWindow):
         for i in range(len(self.hand_card_lables)):
             card_label = self.hand_card_lables[i]
 
-            if len(hand_cards) > i and hand_cards[i]:
+            if len(hand_cards) > i and hand_cards[i] and len(hand_cards[i][0]) > 0 and len(hand_cards[i][1]) > 0:
                 suit, rank = hand_cards[i]
                 card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 card_label.setProperty("handCardActive", "true")
@@ -653,7 +652,7 @@ class PokerOCRWindow(QMainWindow):
         # 更新牌池
         board_cards = result.board_cards or []
         for i, label in enumerate(self.board_labels):
-            if board_cards and i < len(board_cards) and board_cards[i]:
+            if board_cards and i < len(board_cards) and board_cards[i] and len(board_cards[i][0]) > 0 and len(board_cards[i][1]) > 0:
                 suit, rank = board_cards[i]
                 label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 label.setProperty("boardCardActive", "true")

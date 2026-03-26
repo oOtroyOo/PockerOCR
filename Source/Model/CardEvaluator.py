@@ -285,18 +285,27 @@ class CardEvaluatorWorker(QObject):
         batch_size = max(1, len(combos) // max_workers)
         batches = [combos[i : i + batch_size] for i in range(0, len(combos), batch_size)]
 
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # 提交所有批次的任务
-            future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
-
-            # 收集结果
-            for future in as_completed(future_to_batch, timeout=30):  # 30秒超时
+        if max_workers == 1:
+            for batch in batches:
                 try:
-                    batch_results = future.result()
+                    batch_results = self._evaluate_batch(batch, base_cards, min_rank, my_hand, is_opponent)
                     results.extend(batch_results)
                 except Exception:
                     # 处理异常，继续执行
                     pass
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有批次的任务
+                future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
+
+                # 收集结果
+                for future in as_completed(future_to_batch, timeout=30):  # 30秒超时
+                    try:
+                        batch_results = future.result()
+                        results.extend(batch_results)
+                    except Exception:
+                        # 处理异常，继续执行
+                        pass
 
         return results
 
@@ -390,7 +399,7 @@ class CardEvaluatorWorker(QObject):
 
         # 同花顺
         if is_flush and is_straight:
-            cards.sort(key=num_sort, reverse=True)
+            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == "A") else num_sort(x), reverse=True)
             return HandResult("同花顺", 9, straight_high, [], cards)
 
         # 四条
@@ -412,7 +421,7 @@ class CardEvaluatorWorker(QObject):
 
         # 顺子
         if is_straight:
-            cards.sort(key=num_sort, reverse=True)
+            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == "A") else num_sort(x), reverse=True)
             return HandResult("顺子", 5, straight_high, [], cards)
 
         if skip_min:
