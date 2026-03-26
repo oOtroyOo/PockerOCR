@@ -24,7 +24,11 @@ SUIT_SYMBOLS = {"S": ("♠", "黑桃", "black"), "C": ("♣", "梅花", "black")
 all_suits = [x for x in SUIT_SYMBOLS]
 all_ranks = [x for x in RANK_ORDER]
 all_ranks.reverse()
+all_cards: list[tuple[str, str]] = [(s, r) for s in all_suits for r in all_ranks]
 
+@staticmethod
+def get_suit_color(suit):
+    return SUIT_SYMBOLS[suit][2]
 
 @staticmethod
 def charToCard(c: str):
@@ -53,5 +57,7 @@ def cardToStr(card: tuple[str, str]):
 
 @staticmethod
 def cardToStrRichFont(card: tuple[str, str]):
+    if not card or len(card) < 2:
+        return "??"
     suit, rank = card
     return f"<font color={'#ffffff' if (suit =="S" or suit=="C") else '#ff4444'}>{cardToStr(card)}</font>"

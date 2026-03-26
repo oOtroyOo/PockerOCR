@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import requests
 from PyQt5.QtWidgets import (
+    QLayout,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -26,6 +27,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QSizePolicy,
     QScrollArea,
+    QApplication,
 )
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QUrl
@@ -296,7 +298,7 @@ class PokerOCRWindow(QMainWindow):
 
         self.board_labels = []
         for i in range(5):
-            label = self.create_card_label(f"牌池 {i+1}")
+            label = self.create_card_label()
             self.board_labels.append(label)
             board_layout.addWidget(label)
 
@@ -310,11 +312,10 @@ class PokerOCRWindow(QMainWindow):
 
         self.hand_card_lables = []
         for i in range(2):
-            card = self.create_card_label(f"手牌 {i+1}")
+            card = self.create_card_label()
             self.hand_card_lables.append(card)
             hand_layout.addWidget(card)
         hand_group.setLayout(hand_layout)
-        hand_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(hand_group)
 
         # 牌型分析显示
@@ -384,7 +385,7 @@ class PokerOCRWindow(QMainWindow):
 
         return layout
 
-    def create_card_label(self, title):
+    def create_card_label(self):
         """创建卡片标签"""
         label = QLabel("")
         label.setObjectName("cardLabel")
@@ -493,11 +494,18 @@ class PokerOCRWindow(QMainWindow):
         """手动选择牌型并分析"""
 
         # 打开手动选择对话框
-        
+
         if self.manualChooseDialog.exec() == QDialog.DialogCode.Accepted:
             # 获取选中的牌
             hand_cards, board_cards = self.manualChooseDialog.get_selected_cards()
             result = Namespace(hand_cards=list(hand_cards), board_cards=list(board_cards))
+            self.last_result_key = None
+            # 显示加载提示
+            self.hand_rank_label.setText("正在分析牌型...")
+            self.my_possible_label.setText("计算中...")
+            self.opponent_label.setText("计算中...")
+            QApplication.processEvents()  # 刷新UI
+
             # 启动牌型评估
             self.evaluation_pending = True
             self.update_result(result)
@@ -571,12 +579,6 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage(message)
 
-    def get_suit_color(self, suit: str) -> str:
-        """获取花色颜色类别: black(黑桃/梅花) 或 red(红桃/方片)"""
-        if suit in ("H", "D"):  # 红桃、方片
-            return "red"
-        return "black"  # 黑桃、梅花或其他
-
     def on_evaluation_completed(self, my_hand: str, my_possible: str, opponent: str, history_text: str):
         """牌型评估完成回调"""
         # 更新我的牌型
@@ -637,7 +639,7 @@ class PokerOCRWindow(QMainWindow):
                 card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 card_label.setProperty("handCardActive", "true")
                 card_label.setProperty("handCardInactive", "")
-                card_label.setProperty("suitColor", self.get_suit_color(suit))
+                card_label.setProperty("suitColor", defines.get_suit_color(suit))
             else:
                 card_label.setText("")
                 card_label.setProperty("handCardActive", "")
@@ -653,7 +655,7 @@ class PokerOCRWindow(QMainWindow):
                 label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
                 label.setProperty("boardCardActive", "true")
                 label.setProperty("boardCardInactive", "")
-                label.setProperty("suitColor", self.get_suit_color(suit))
+                label.setProperty("suitColor", defines.get_suit_color(suit))
             else:
                 label.setText("")
                 label.setProperty("boardCardActive", "")

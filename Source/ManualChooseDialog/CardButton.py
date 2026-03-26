@@ -23,7 +23,7 @@ class CardButton(QPushButton):
         self.card = (suit, rank)
         self.parentDialog = parent
         # 设置按钮文本
-        self.setText(f"{defines.SUIT_SYMBOLS[suit][0]}{rank}")
+        self.setText(defines.cardToStr(self.card))
         # self.setFont(QFont("Arial", 12, QFont.Bold))
         # self.setFixedSize(50, 70)
         # 更新样式
@@ -51,7 +51,7 @@ class CardButton(QPushButton):
         if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
             self.parentDialog.on_card_selected(self.card, event.button())
         self.update_style()
-        # super().mousePressEvent(event)
+        super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

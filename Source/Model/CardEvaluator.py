@@ -31,9 +31,10 @@ class EvaluationResult(NamedTuple):
     my_possible: list[tuple[str, list]]  # 我可能的牌型 [(牌型名, 牌组合), ...]
     opponent_possible: list[tuple[str, list]]  # 对手可能的牌型
 
+
 def cards_to_str(cards: list) -> str:
     """将牌列表转为字符串"""
-    return " ".join(defines.cardToStr(c) for c in cards)
+    return " ".join(defines.cardToStrRichFont(c) for c in cards)
 
 
 class CardEvaluatorWorker(QObject):
@@ -55,19 +56,24 @@ class CardEvaluatorWorker(QObject):
         if not self._is_running:
             return
 
-        result = self._full_evaluate(hand_cards, board_cards)
+        try:
+            result = self._full_evaluate(hand_cards, board_cards)
 
-        if self._is_running:
-            # 格式化我的牌型（牌型名 + 关键牌）
-            my_hand_str = self._format_hand_name(result.my_hand)
+            if self._is_running:
+                # 格式化我的牌型（牌型名 + 关键牌）
+                my_hand_str = self._format_hand_name(result.my_hand)
 
-            # 格式化我可能的牌型
-            my_possible_str = self._format_possible_hands(result.my_possible)
+                # 格式化我可能的牌型
+                my_possible_str = self._format_possible_hands(result.my_possible)
 
-            # 格式化对手可能的牌型
-            opponent_str = self._format_possible_hands(result.opponent_possible)
+                # 格式化对手可能的牌型
+                opponent_str = self._format_possible_hands(result.opponent_possible)
 
-            self.evaluation_finished.emit(my_hand_str, my_possible_str, opponent_str, history_text)
+                self.evaluation_finished.emit(my_hand_str, my_possible_str, opponent_str, history_text)
+        except Exception:
+            # 发生异常时发送空结果，避免UI卡死
+            if self._is_running:
+                self.evaluation_finished.emit("评估失败", "无法计算", "无法计算", history_text)
 
     def _format_hand_name(self, hand: HandResult) -> str:
         """格式化牌型名称，显示简洁信息"""
@@ -255,8 +261,17 @@ class CardEvaluatorWorker(QObject):
         """
         results = []
 
-        # 获取CPU核心数，最多使用4个进程
-        max_workers = os.cpu_count() or 8
+        # 如果组合数量太大，限制处理数量以避免长时间阻塞
+        MAX_COMBOS = 20000
+        if len(combos) > MAX_COMBOS:
+            combos = combos[:MAX_COMBOS]
+
+        # 限制进程数，避免过多进程阻塞系统
+        cpu_count = os.cpu_count()
+        if cpu_count:
+            max_workers = cpu_count - 2
+        else:
+            max_workers = 8
 
         # 将任务分批处理，每批处理多个组合
         batch_size = max(1, len(combos) // max_workers)
@@ -267,11 +282,11 @@ class CardEvaluatorWorker(QObject):
             future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
 
             # 收集结果
-            for future in as_completed(future_to_batch):
+            for future in as_completed(future_to_batch, timeout=30):  # 30秒超时
                 try:
                     batch_results = future.result()
                     results.extend(batch_results)
-                except Exception as e:
+                except Exception:
                     # 处理异常，继续执行
                     pass
 
@@ -356,76 +371,65 @@ class CardEvaluatorWorker(QObject):
         # 各种牌型判断
         count_values = sorted(rank_counts.values(), reverse=True)
 
+        # 定义排序key函数
+        num_sort = lambda x: defines.RANK_ORDER.get(x[1], 0)
+        suit_sort = lambda x: 4 - defines.all_suits.index(x[0])
+
         # 皇家同花顺
         if is_flush and is_straight and straight_high == 14:
-            cards.sort(key=lambda x: defines.RANK_ORDER.get(x[1], 0), reverse=True)
+            cards.sort(key=num_sort, reverse=True)
             return HandResult("皇家同花顺", 10, 14, [], cards)
 
         # 同花顺
         if is_flush and is_straight:
-            cards.sort(key=lambda x: defines.RANK_ORDER.get(x[1], 0), reverse=True)
+            cards.sort(key=num_sort, reverse=True)
             return HandResult("同花顺", 9, straight_high, [], cards)
 
         # 四条
         if count_values == [4, 1]:
             four_rank = [r for r, c in rank_counts.items() if c == 4][0]
-            cards.sort(key=lambda x: (1000 + (4 - defines.all_suits.index(x[0]))) if x[1] == four_rank else defines.RANK_ORDER.get(x[1], 0), reverse=True)
+            cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == four_rank else num_sort(x), reverse=True)
             return HandResult("四条", 8, defines.RANK_ORDER.get(four_rank, 0), rank_values, cards)
 
         # 葫芦
         if count_values == [3, 2]:
             three_rank = [r for r, c in rank_counts.items() if c == 3][0]
-            cards.sort(
-                key=lambda x: (1000 + (4 - defines.all_suits.index(x[0]))) if x[1] == three_rank else (defines.RANK_ORDER.get(x[1], 0) * 10 + (4 - defines.all_suits.index(x[0]))),
-                reverse=True,
-            )
+            cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
             return HandResult("葫芦", 7, defines.RANK_ORDER.get(three_rank, 0), rank_values, cards)
 
         # 同花
         if is_flush:
-            cards.sort(key=lambda x: defines.RANK_ORDER.get(x[1], -1), reverse=True)
+            cards.sort(key=num_sort, reverse=True)
             return HandResult("同花", 6, rank_values[0], rank_values, cards)
 
         # 顺子
         if is_straight:
-            cards.sort(key=lambda x: defines.RANK_ORDER.get(x[1], -1), reverse=True)
+            cards.sort(key=num_sort, reverse=True)
             return HandResult("顺子", 5, straight_high, [], cards)
 
         if skip_min:
             return None  # type: ignore
+
         # 三条
         if count_values == [3, 1, 1]:
             three_rank = [r for r, c in rank_counts.items() if c == 3][0]
-            cards.sort(
-                key=lambda x: (1000 + (4 - defines.all_suits.index(x[0]))) if x[1] == three_rank else (defines.RANK_ORDER.get(x[1], 0) * 10 + (4 - defines.all_suits.index(x[0]))),
-                reverse=True,
-            )
+            cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
             return HandResult("三条", 4, defines.RANK_ORDER.get(three_rank, 0), rank_values, cards)
 
         # 两对
         if count_values == [2, 2, 1]:
             pairs = sorted([defines.RANK_ORDER.get(r, 0) for r, c in rank_counts.items() if c == 2], reverse=True)
-            cards.sort(
-                key=lambda x: (
-                    (pairs.index(x[1]) * 1000 + (4 - defines.all_suits.index(x[0])))
-                    if x[1] in pairs
-                    else (defines.RANK_ORDER.get(x[1], 0) * 10 + (4 - defines.all_suits.index(x[0])))
-                ),
-                reverse=True,
-            )
+            cards.sort(key=lambda x: num_sort(x) * (1000 if num_sort(x) in pairs else 10) + suit_sort(x), reverse=True)
             return HandResult("两对", 3, pairs[0], pairs, cards)
 
         # 一对
         if count_values == [2, 1, 1, 1]:
             pair_rank = [r for r, c in rank_counts.items() if c == 2][0]
-            cards.sort(
-                key=lambda x: (1000 + (4 - defines.all_suits.index(x[0]))) if x[1] == pair_rank else (defines.RANK_ORDER.get(x[1], 0) * 10 + (4 - defines.all_suits.index(x[0]))),
-                reverse=True,
-            )
+            cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == pair_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
             return HandResult("一对", 2, defines.RANK_ORDER.get(pair_rank, 0), rank_values, cards)
 
         # 高牌
-        cards.sort(key=lambda x: defines.RANK_ORDER.get(x[1], 0), reverse=True)
+        cards.sort(key=num_sort, reverse=True)
         return HandResult("高牌", 1, rank_values[0], rank_values, cards)
 
     @staticmethod
@@ -477,7 +481,13 @@ class CardEvaluator(QObject):
         self._worker.moveToThread(self._thread)
 
         self._worker.evaluation_finished.connect(self._on_evaluation_finished)
-        self._thread.started.connect(lambda: self._worker.evaluate(hand_cards, board_cards, history_text) if self._worker else None)
+
+        # 使用函数引用而不是 lambda，避免延迟执行
+        def start_work():
+            if self._worker and self._is_running:
+                self._worker.evaluate(hand_cards, board_cards, history_text)
+
+        self._thread.started.connect(start_work)
 
         self._is_running = True
         self._thread.start()
@@ -491,17 +501,24 @@ class CardEvaluator(QObject):
         """停止评估并清理资源"""
         self._is_running = False
 
+        # 先停止 worker
         if self._worker:
             self._worker.stop()
-            self._worker.deleteLater()
-            self._worker = None
 
+        # 再停止线程
         if self._thread:
             if self._thread.isRunning():
                 self._thread.quit()
-                self._thread.wait(500)
+                if not self._thread.wait(1000):  # 最多等待1秒
+                    self._thread.terminate()
+                    self._thread.wait(500)
             self._thread.deleteLater()
             self._thread = None
+
+        # 最后清理 worker
+        if self._worker:
+            self._worker.deleteLater()
+            self._worker = None
 
     def is_running(self) -> bool:
         """检查是否正在评估"""
