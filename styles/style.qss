@@ -449,16 +449,17 @@ QLabel#possibleLabel {
 
 CardButton {
     font-size: 14px;
-    padding: 4px;
+    padding: 0px;
     font-weight: bold;
     font-family: 'Monaco'，"Consolas", "Courier New", monospace;
     background-color: #1a2e1d;
-    border: 2px solid #2d2d44;
-    border-radius: 6px;
-    font-size: 14px;
+    border: 1px solid #2d2d44;
+    border-radius: 5px;
     font-weight: bold;
-    min-width :20px;
-    min-height : 25px;
+    min-width :26px;
+    min-height : 30px;
+    max-width :26px;
+    max-height : 30px;
 }
 
 CardButton:hover {
@@ -467,12 +468,12 @@ CardButton:hover {
 
 CardButton[choose="hand"] {
     background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #24e079, stop:1 #0e9e39);
+        stop:0 #0e9e39 , stop:1 #035c2b);
 }
 
 CardButton[choose="board"] {
     background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #42bcf5, stop:1 #1c71df);
+        stop:0 #1c71df , stop:1 #035981);
 }
 
 /* 黑色花色：黑桃(S)、梅花(C) - 默认白色 */

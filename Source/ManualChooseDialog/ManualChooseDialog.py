@@ -23,16 +23,16 @@ class ManualChooseDialog(QDialog):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         combo_layout = QHBoxLayout()
         combo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.hand_card_lables: list[QLabel] = []
+        self.hand_card_lables: list[CardButton] = []
         for i in range(2):
-            card = self.create_card_label()
+            card = CardButton(None, None, self)
             self.hand_card_lables.append(card)
             combo_layout.addWidget(card)
         combo_layout.addSpacing(30)
 
-        self.board_labels: list[QLabel] = []
+        self.board_labels: list[CardButton] = []
         for i in range(5):
-            label = self.create_card_label()
+            label = CardButton(None, None, self)
             self.board_labels.append(label)
             combo_layout.addWidget(label)
 
@@ -83,40 +83,21 @@ class ManualChooseDialog(QDialog):
 
         self.setLayout(layout)
 
-    def create_card_label(self):
-        """创建卡片标签"""
-        label = QLabel("")
-        label.setObjectName("cardLabel")
-        label.setProperty("handCardActive", "true")
-        label.setProperty("handCardInactive", "")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return label
-
     def refresh_card_label(self):
-        iter_hands = iter(self.selected_hand)
-        iter_boards = iter(self.selected_board)
+        iter_hands = iter(sorted(self.selected_hand, key=lambda x: x[1], reverse=True))
+        iter_boards = iter(sorted(self.selected_board, key=lambda x: x[1], reverse=True))
         for label in self.hand_card_lables:
             try:
                 card = next(iter_hands)
-                label.setText(defines.cardToStr(card))
-                label.setProperty("suitColor", defines.get_suit_color(card[0]))
-                style = label.style()
-                if style:
-                    # style.unpolish(self)
-                    style.polish(label)
+                label.setCard(card)
             except:
-                label.setText('')
+                label.setCard(None)
         for label in self.board_labels:
             try:
                 card = next(iter_boards)
-                label.setText(defines.cardToStr(card))
-                label.setProperty("suitColor", defines.get_suit_color(card[0]))
-                style = label.style()
-                if style:
-                    # style.unpolish(self)
-                    style.polish(label)
+                label.setCard(card)
             except:
-                label.setText('')
+                label.setCard(None)
 
     def SuitSection(self, suit_code: str):
         symbol, name, color = defines.SUIT_SYMBOLS[suit_code]
