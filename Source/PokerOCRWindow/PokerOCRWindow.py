@@ -408,12 +408,12 @@ class PokerOCRWindow(QMainWindow):
         win32gui.EnumWindows(enum_windows, None)
 
         # 排序并添加到下拉框
-        self.window_list.sort(key=lambda x: x[1])
+        self.window_list.sort(key=lambda x: (100 if x[1] in self.config["window_title"] else 0) + (1 if x[2] == "UnityWndClass" else 0),reverse=True)
         isOpen = self.window_combo.currentIndex() < 0
         for hwnd, title, className in self.window_list:
             self.window_combo.addItem(title, hwnd)
-            if isOpen and (title in self.config["window_title"]) and className == "UnityWndClass":
-                self.window_combo.setCurrentIndex(self.window_combo.count() - 1)
+            # if isOpen and (title in self.config["window_title"]) and className == "UnityWndClass":
+            #     self.window_combo.setCurrentIndex(self.window_combo.count() - 1)
 
         st_bar = self.statusBar()
         if st_bar:
