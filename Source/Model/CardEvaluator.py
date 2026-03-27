@@ -4,7 +4,7 @@
 """
 
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from itertools import combinations
 from typing import NamedTuple
 import typing
@@ -261,7 +261,7 @@ class CardEvaluatorWorker(QObject):
         return my_result, opponent_result
 
     def _parallel_evaluate_combos(self, combos: list, base_cards: list, min_rank: int, my_hand: typing.Optional[HandResult], is_opponent: bool) -> list[HandResult]:
-        """并行评估牌型组合
+        """评估牌型组合（使用多线程，因为任务粒度小，进程开销更大）
 
         Args:
             combos: 未知牌组合列表
@@ -276,42 +276,35 @@ class CardEvaluatorWorker(QObject):
         results = []
 
         # 如果组合数量太大，限制处理数量以避免长时间阻塞
-        MAX_COMBOS = 20000
+        MAX_COMBOS = 5000
         if len(combos) > MAX_COMBOS:
             combos = combos[:MAX_COMBOS]
 
-        # 限制进程数，避免过多进程阻塞系统
-        cpu_count = os.cpu_count()
-        if cpu_count:
-            max_workers = cpu_count - 2
-        else:
-            max_workers = 8
-        max_workers = 1
-        # 将任务分批处理，每批处理多个组合
+        # 对于小批量，直接同步执行更快
+        if len(combos) < 100:
+            return self._evaluate_batch(combos, base_cards, min_rank, my_hand, is_opponent)
+
+        # 使用线程池（对于小任务粒度，线程比进程开销小）
+        from concurrent.futures import ThreadPoolExecutor
+        cpu_count = os.cpu_count() or 4
+        max_workers = min(4, cpu_count)
+
+        # 将任务分批处理
         batch_size = max(1, len(combos) // max_workers)
         batches = [combos[i : i + batch_size] for i in range(0, len(combos), batch_size)]
 
-        if max_workers == 1:
-            for batch in batches:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 提交所有批次的任务
+            future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
+
+            # 收集结果
+            for future in as_completed(future_to_batch, timeout=10):  # 10秒超时
                 try:
-                    batch_results = self._evaluate_batch(batch, base_cards, min_rank, my_hand, is_opponent)
+                    batch_results = future.result()
                     results.extend(batch_results)
                 except Exception:
                     # 处理异常，继续执行
                     pass
-        else:
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                # 提交所有批次的任务
-                future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
-
-                # 收集结果
-                for future in as_completed(future_to_batch, timeout=30):  # 30秒超时
-                    try:
-                        batch_results = future.result()
-                        results.extend(batch_results)
-                    except Exception:
-                        # 处理异常，继续执行
-                        pass
 
         return results
 
