@@ -638,7 +638,7 @@ class PokerOCRWindow(QMainWindow):
 
             if len(hand_cards) > i and hand_cards[i] and len(hand_cards[i][0]) > 0 and hand_cards[i][1] is not None and hand_cards[i][1] > 0:
                 suit, rank = hand_cards[i]
-                rank_str = defines.RANK_NAMES.get(rank, str(rank))
+                rank_str = defines.NUMB_NAMES.get(rank, str(rank))
                 card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank_str)}")
                 card_label.setProperty("handCardActive", "true")
                 card_label.setProperty("handCardInactive", "")
@@ -655,7 +655,7 @@ class PokerOCRWindow(QMainWindow):
         for i, label in enumerate(self.board_labels):
             if board_cards and i < len(board_cards) and board_cards[i] and len(board_cards[i][0]) > 0 and board_cards[i][1] is not None and board_cards[i][1] > 0:
                 suit, rank = board_cards[i]
-                rank_str = defines.RANK_NAMES.get(rank, str(rank))
+                rank_str = defines.NUMB_NAMES.get(rank, str(rank))
                 label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank_str)}")
                 label.setProperty("boardCardActive", "true")
                 label.setProperty("boardCardInactive", "")
@@ -683,8 +683,8 @@ class PokerOCRWindow(QMainWindow):
                 self.my_possible_label.setText("计算中...")
                 self.opponent_label.setText("计算中...")
                 # 准备历史记录文本
-                hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.RANK_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in hand_cards])
-                board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.RANK_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in board_cards])
+                hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.NUMB_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in hand_cards])
+                board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.NUMB_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in board_cards])
 
                 # 异步评估牌型
                 self.evaluation_pending = True

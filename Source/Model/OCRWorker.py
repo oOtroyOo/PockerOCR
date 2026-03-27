@@ -206,7 +206,7 @@ class OCRWorker(threading.Thread):
                 if text == "0":
                     text = "T"  # OCR 可能将 10 识别为 "0"
                 # 将 rank 字符串转换为 int
-                rank_int = defines.RANK_ORDER.get(text, 0)
+                rank_int = defines.NUMB_ORDER.get(text, 0)
                 return (suit, rank_int)
             else:
                 if screenshot_debug_img:

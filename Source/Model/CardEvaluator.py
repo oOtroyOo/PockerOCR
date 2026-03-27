@@ -10,31 +10,41 @@ from typing import NamedTuple
 import typing
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import os
-
+from typing import Optional
 from Source import defines
 
 
 class HandResult(NamedTuple):
     """牌型评估结果"""
 
-    name: str  # 牌型名称
     rank: int  # 牌型等级 1-10
     high_card: int  # 最高牌
     kickers: list  # 踢脚牌
-    cards: list  # 具体牌组合
+    cards: list[tuple[str, int]]  # 具体牌组合
+
+    def get_rank_name(self):
+        return defines.HAND_RANKS.get(self.rank, "")
 
 
 class EvaluationResult(NamedTuple):
     """完整评估结果"""
 
     my_hand: HandResult  # 我的牌型
-    my_possible: list[tuple[str, list]]  # 我可能的牌型 [(牌型名, 牌组合), ...]
-    opponent_possible: list[tuple[str, list]]  # 对手可能的牌型
+    my_possible: list[tuple[int, list[tuple[str, int]]]]  # 我可能的牌型 [(牌型名, 牌组合), ...]
+    opponent_possible: list[tuple[int, list[tuple[str, int]]]]  # 对手可能的牌型
 
 
-def cards_to_str(cards: list) -> str:
+@staticmethod
+def cardToStrRichFont(card: tuple[str, int], known: bool):
+    if not card or len(card) < 2:
+        return "??"
+    suit, rank = card
+    return f"<font color={"#3F3F3F" if known else ('#ffffff' if (suit =="S" or suit=="C") else '#ff4444')}>{defines.cardToStr(card)}</font>"
+
+
+def cards_to_str(cards: list, known_cards: Optional[list[tuple[str, int]]] = None) -> str:
     """将牌列表转为字符串"""
-    return " ".join(defines.cardToStrRichFont(c) for c in cards)
+    return " ".join(cardToStrRichFont(c, (known_cards and c in known_cards)) for c in cards)
 
 
 class CardEvaluatorWorker(QObject):
@@ -56,16 +66,16 @@ class CardEvaluatorWorker(QObject):
         """评估牌型"""
         if not self._is_running:
             return
-
+        known_cards = board_cards + hand_cards
         try:
             result = self._full_evaluate(hand_cards, board_cards)
 
             if self._is_running:
                 # 格式化我可能的牌型
-                my_possible_str = self._format_possible_hands(result.my_possible)
+                my_possible_str = self._format_possible_hands(result.my_possible, known_cards)
 
                 # 格式化对手可能的牌型
-                opponent_str = self._format_possible_hands(result.opponent_possible)
+                opponent_str = self._format_possible_hands(result.opponent_possible, known_cards)
 
                 self.evaluation_finished.emit(my_possible_str, opponent_str, history_text)
         except Exception:
@@ -75,9 +85,9 @@ class CardEvaluatorWorker(QObject):
 
     def _format_hand_name(self, hand: HandResult) -> str:
         """格式化牌型名称，显示简洁信息"""
-        name = hand.name
+        name = hand.get_rank_name()
         high = hand.high_card
-        high_name = defines.RANK_NAMES.get(high, "")
+        high_name = defines.charToCard(hand.high_card)
         cards_str = cards_to_str(hand.cards)
 
         # 根据牌型添加详细信息
@@ -87,8 +97,8 @@ class CardEvaluatorWorker(QObject):
             return f"{name} {high_name} [{cards_str}]"
         elif hand.rank == 3:  # 两对
             if hand.kickers and len(hand.kickers) >= 2:
-                p1 = defines.RANK_NAMES.get(hand.kickers[0], "")
-                p2 = defines.RANK_NAMES.get(hand.kickers[1], "")
+                p1 = defines.NUMB_NAMES.get(hand.kickers[0], "")
+                p2 = defines.NUMB_NAMES.get(hand.kickers[1], "")
                 return f"{name} {p1}和{p2} [{cards_str}]"
             return f"{name} [{cards_str}]"
         elif hand.rank == 4:  # 三条
@@ -108,18 +118,18 @@ class CardEvaluatorWorker(QObject):
 
         return f"{name} [{cards_str}]"
 
-    def _format_possible_hands(self, possible: list[tuple[str, list]]) -> str:
+    def _format_possible_hands(self, possible: list[tuple[int, list[tuple[str, int]]]], known_cards: list[tuple[str, int]]) -> str:
         """格式化可能牌型列表"""
         if not possible:
             return "无"
 
         lines = []
-        current_name = None
-        for name, cards in possible:
-            if name != current_name:
-                lines.append(f"{name}")
-                current_name = name
-            lines.append(f"    {cards_to_str(cards)}")
+        current_rank = None
+        for rank, cards in possible:
+            if rank != current_rank:
+                lines.append(defines.HAND_RANKS.get(rank, None))
+                current_rank = rank
+            lines.append(f"    {cards_to_str(cards,known_cards)}")
 
         return "<br>".join(lines)
 
@@ -138,20 +148,16 @@ class CardEvaluatorWorker(QObject):
 
         return EvaluationResult(my_hand, my_possible, opponent_possible)
 
-    def _evaluate_best_hand(self, cards: list) -> HandResult:
+    def _evaluate_best_hand(self, cards: list[tuple[str, int]]) -> HandResult:
         """从所有牌中找出最佳牌型"""
-        if len(cards) < 5:
-            return HandResult("高牌", 1, 0, [], cards)
-
         # 尝试所有5张牌组合
         best_result = None
-        for combo in combinations(cards, 5):
-            combo_list = list(combo)
-            result = self._evaluate_five_cards_static(combo_list, False)
-            if best_result is None or self._compare_hands(result, best_result) > 0:
-                best_result = result
 
-        return best_result or HandResult("高牌", 1, 0, [], cards[:5])
+        result = self._evaluate_cards_static(cards, False)
+        if best_result is None or self._compare_hands(result, best_result) > 0:
+            best_result = result
+
+        return best_result or HandResult(1, 0, [], cards[:5])
 
     def _compare_hands(self, h1: HandResult, h2: HandResult) -> int:
         """比较两个牌型，返回 >0 表示 h1 更大"""
@@ -169,7 +175,9 @@ class CardEvaluatorWorker(QObject):
 
         return 0
 
-    def _get_all_possible_hands(self, board_cards: list, hand_cards: list, my_hand: HandResult) -> tuple[list[tuple[str, list]], list[tuple[str, list]]]:
+    def _get_all_possible_hands(
+        self, board_cards: list, hand_cards: list, my_hand: HandResult
+    ) -> tuple[list[tuple[int, list[tuple[str, int]]]], list[tuple[int, list[tuple[str, int]]]]]:
         """获取所有可能的牌型（我可能 + 对手可能）
 
         我可能：假设还剩1张河牌未发，计算所有可能达成的牌型（顺子及以上）
@@ -196,7 +204,7 @@ class CardEvaluatorWorker(QObject):
                     available.append(card)
 
         # ========== 我可能的牌型（还剩1张河牌）==========
-        my_possible: dict[str, list] = {}
+        my_possible: dict[int, list] = {}
 
         if len(known_cards) < 7:
             # 使用多线程并行计算我可能的牌型
@@ -204,34 +212,32 @@ class CardEvaluatorWorker(QObject):
             my_results = self._parallel_evaluate_combos(my_combos, known_cards, 5, None, is_opponent=False)
 
             for result in my_results:
-                if result.name not in my_possible:
-                    my_possible[result.name] = []
+                if result.rank not in my_possible:
+                    my_possible[result.rank] = []
                 cards_str = cards_to_str(result.cards)
-                if cards_str not in [cards_to_str(c) for c in my_possible[result.name]]:
-                    my_possible[result.name].append(result.cards)
+                if cards_str not in [cards_to_str(c) for c in my_possible[result.rank]]:
+                    my_possible[result.rank].append(result.cards)
 
             # 排序
             for name, card_list in my_possible.items():
                 card_list.sort(
-                    key=lambda cards: sum(
-                        [(index * 100 + (cards[index][1] * 10 + (4 - defines.all_suits.index(cards[index][0])))) for index in range(len(cards))]
-                    ),
+                    key=lambda cards: sum([(index * 100 + (cards[index][1] * 10 + (4 - defines.all_suits.index(cards[index][0])))) for index in range(len(cards))]),
                     reverse=True,
                 )
 
         # ========== 对手可能的牌型（基于牌池+河牌推断）==========
-        opponent_possible: dict[str, list] = {}
+        opponent_possible: dict[int, list] = {}
 
         # 使用多线程并行计算对手可能的牌型
         opponent_combos = list(combinations(available, 7 - len(board_cards)))
         opponent_results = self._parallel_evaluate_combos(opponent_combos, board_cards, 5, my_hand, is_opponent=True)
 
         for result in opponent_results:
-            if result.name not in opponent_possible:
-                opponent_possible[result.name] = []
+            if result.rank not in opponent_possible:
+                opponent_possible[result.rank] = []
 
             all_same = False
-            for card_list in opponent_possible[result.name]:
+            for card_list in opponent_possible[result.rank]:
                 if len(card_list) == len(result.cards):
                     for index in range(len(card_list)):
                         if card_list[index] == card_list[index]:
@@ -239,16 +245,16 @@ class CardEvaluatorWorker(QObject):
                                 all_same = True
                             break
             if not all_same:
-                opponent_possible[result.name].append(result.cards)
+                opponent_possible[result.rank].append(result.cards)
 
         # 格式化结果
         my_result = []
-        for name in sorted(my_possible.keys(), key=lambda x: defines.HAND_RANKS.get(x, 0), reverse=True):
+        for name in sorted(my_possible.keys(), reverse=True):
             for cards in my_possible[name][:5]:  # 每种最多5个
                 my_result.append((name, cards))
 
         opponent_result = []
-        for name in sorted(opponent_possible.keys(), key=lambda x: defines.HAND_RANKS.get(x, 0), reverse=True):
+        for name in sorted(opponent_possible.keys(), reverse=True):
             for cards in opponent_possible[name][:2]:  # 每种最多2个
                 opponent_result.append((name, cards))
 
@@ -328,129 +334,141 @@ class CardEvaluatorWorker(QObject):
         for combo_unknown in batch:
             cards7 = base_cards + list(combo_unknown)
 
-            for combo5 in combinations(cards7, 5):
-                combo_list = list(combo5)
-
-                # 评估牌型
-                result = CardEvaluatorWorker._evaluate_five_cards_static(combo_list)
-                if not result:
-                    continue
-                # 检查条件
-                if result.rank < min_rank:
-                    continue
-                if is_opponent:
-                    if my_hand:
-                        if result.rank < my_hand.rank:
+            # 评估牌型
+            result = CardEvaluatorWorker._evaluate_cards_static(cards7)
+            if not result:
+                continue
+            # 检查条件
+            if result.rank < min_rank:
+                continue
+            if is_opponent:
+                if my_hand:
+                    if result.rank < my_hand.rank:
+                        continue
+                    elif result.rank == my_hand.rank:
+                        skip = False
+                        for i in range(min(len(my_hand.cards), len(result.cards))):
+                            if my_hand.cards[i][1] > result.cards[i][1]:
+                                skip = True
+                                break
+                        if skip:
                             continue
-                        elif result.rank == my_hand.rank:
-                            skip = False
-                            for i in range(min(len(my_hand.cards), len(result.cards))):
-                                if my_hand.cards[i][1] > result.cards[i][1]:
-                                    skip = True
-                                    break
-                            if skip:
-                                continue
 
-                # 去重检查
-                cards_str = " ".join(f"{c[0]}{c[1]}" for c in result.cards)
-                if cards_str in seen:
-                    continue
-                seen.add(cards_str)
+            # 去重检查
+            cards_str = " ".join(f"{c[0]}{c[1]}" for c in result.cards)
+            if cards_str in seen:
+                continue
+            seen.add(cards_str)
 
-                batch_results.append(result)
+            batch_results.append(result)
 
         return batch_results
 
     @staticmethod
-    def _evaluate_five_cards_static(cards: list, skip_min=False) -> HandResult:
-        """静态方法版本的 _evaluate_five_cards（用于多进程）
-
+    def _evaluate_cards_static(cards: list[tuple[str, int]], skip_min=False) -> HandResult:
+        """
         Args:
-            cards: 5张牌的列表
+            cards: 7张牌的列表
 
         Returns:
             HandResult 牌型评估结果
         """
         suits = [c[0] for c in cards]
         ranks = [c[1] for c in cards]
-        rank_values = sorted(ranks, reverse=True)
 
         # 统计
         suit_counts = Counter(suits)
         rank_counts = Counter(ranks)
 
-        # 检查同花
-        is_flush = len(suit_counts) == 1
-
-        # 检查顺子
-        is_straight, straight_high = CardEvaluatorWorker._check_straight_static(rank_values)
-
-        # 各种牌型判断
-        count_values = sorted(rank_counts.values(), reverse=True)
-
         # 定义排序key函数
         num_sort = lambda x: x[1]  # rank 已经是 int
         suit_sort = lambda x: 4 - defines.all_suits.index(x[0])
 
-        # 皇家同花顺
-        if is_flush and is_straight and straight_high == 14:
-            cards.sort(key=num_sort, reverse=True)
-            return HandResult("皇家同花顺", 10, 14, [], cards)
-
-        # 同花顺 (A-2-3-4-5 顺子中 A 作为 1)
-        if is_flush and is_straight:
-            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == 14) else num_sort(x), reverse=True)
-            return HandResult("同花顺", 9, straight_high, [], cards)
-
         # 四条
-        if count_values == [4, 1]:
+        if any([x == 4 for x in rank_counts.values()]):
             four_rank = [r for r, c in rank_counts.items() if c == 4][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == four_rank else num_sort(x), reverse=True)
-            return HandResult("四条", 8, four_rank, rank_values, cards)
+            return HandResult(8, four_rank, ranks, cards)
+
+        cards.sort(key=num_sort, reverse=True)
+
+        # 检查同花
+        is_flush = next((x for x in suit_counts if suit_counts[x] >= 5), None)
+        flush_cards = None
+        flush_high = None
+        if is_flush:
+            flush_cards = CardEvaluatorWorker._check_flush_static(is_flush, cards)
+            if flush_cards:
+                flush_high = flush_cards[0][1]
+                straight_flush = CardEvaluatorWorker._check_straight_static(flush_cards)
+                # 同花顺 (A-2-3-4-5 顺子中 A 作为 1)
+                if straight_flush:
+                    if len(straight_flush) >= 5:
+                        straight_high = straight_flush[0][1]
+                        # 皇家同花顺 10
+                        return HandResult(10 if straight_high == 14 else 9, straight_high, [], straight_flush[:5])
+
+        # 各种牌型判断
+        count_values = sorted(rank_counts.values(), reverse=True)
+        three_count = [x == 3 for x in count_values].count(True)
+        two_count = [x == 2 for x in count_values].count(True)
 
         # 葫芦
-        if count_values == [3, 2]:
-            three_rank = [r for r, c in rank_counts.items() if c == 3][0]
-            cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("葫芦", 7, three_rank, rank_values, cards)
+        if three_count > 0 and (three_count > 1 or two_count > 0):
+            three_rank = next(r for r, c in rank_counts.items() if c == 3)
+            cards.sort(
+                key=lambda x: ((num_sort(x) * 100 * rank_counts[x[1]] + suit_sort(x)) if x[1] in rank_counts else (num_sort(x) * 10 + suit_sort(x))),  # 两个
+                reverse=True,
+            )  # 撒排
+            return HandResult(7, three_rank, ranks, cards[:5])
 
         # 同花
-        if is_flush:
-            cards.sort(key=num_sort, reverse=True)
-            return HandResult("同花", 6, rank_values[0], rank_values, cards)
+        if is_flush and flush_cards and flush_high:
+            return HandResult(6, flush_high, ranks, flush_cards[:5])
 
-        # 顺子 (A-2-3-4-5 顺子中 A 作为 1)
-        if is_straight:
-            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == 14) else num_sort(x), reverse=True)
-            return HandResult("顺子", 5, straight_high, [], cards)
+        # 检查顺子 (A-2-3-4-5 顺子中 A 作为 1)
+        straight_cards = CardEvaluatorWorker._check_straight_static(cards)
+        if straight_cards:
+            straight_high = straight_cards[0][1]
+            if straight_high and straight_cards:
+                return HandResult(5, straight_high, [], straight_cards[:5])
 
         if skip_min:
             return None  # type: ignore
 
         # 三条
-        if count_values == [3, 1, 1]:
+        if three_count > 0:
             three_rank = [r for r, c in rank_counts.items() if c == 3][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("三条", 4, three_rank, rank_values, cards)
-
+            return HandResult(4, three_rank, ranks, cards[:5])
         # 两对
-        if count_values == [2, 2, 1]:
+        if two_count >= 2:
             pairs = sorted([r for r, c in rank_counts.items() if c == 2], reverse=True)
             cards.sort(key=lambda x: num_sort(x) * (1000 if num_sort(x) in pairs else 10) + suit_sort(x), reverse=True)
-            return HandResult("两对", 3, pairs[0], pairs, cards)
+            return HandResult(3, pairs[0], pairs, cards[:5])
 
         # 一对
-        if count_values == [2, 1, 1, 1]:
+        if two_count == 1:
             pair_rank = [r for r, c in rank_counts.items() if c == 2][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == pair_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("一对", 2, pair_rank, rank_values, cards)
+            return HandResult(2, pair_rank, ranks, cards[:5])
 
         # 高牌
-        cards.sort(key=num_sort, reverse=True)
-        return HandResult("高牌", 1, rank_values[0], rank_values, cards)
+        return HandResult(1, ranks[0], ranks, cards[:5])
 
     @staticmethod
-    def _check_straight_static(rank_values: list) -> tuple[bool, int]:
+    def _check_flush_static(is_flush, cards: list[tuple[str, int]]) -> Optional[list[tuple[str, int]]]:
+        result: list[tuple[str, int]] = []
+        for card in cards:
+            suit = card[0]
+            if suit == is_flush:
+                result.append(card)
+        if len(result) >= 5:
+            return result
+        return None
+
+    @staticmethod
+    def _check_straight_static(cards: list[tuple[str, int]]) -> Optional[list[tuple[str, int]]]:
         """静态方法版本的 _check_straight（用于多进程）
 
         Args:
@@ -459,22 +477,34 @@ class CardEvaluatorWorker(QObject):
         Returns:
             (是否顺子, 最高牌)
         """
-        unique_sorted = sorted(set(rank_values), reverse=True)
 
-        # A可以作为1使用 (A-2-3-4-5)
-        if 14 in unique_sorted:
-            unique_sorted.append(1)
-
-        for i in range(len(unique_sorted) - 4):
-            consecutive = True
-            for j in range(4):
-                if unique_sorted[i + j] - unique_sorted[i + j + 1] != 1:
-                    consecutive = False
+        # A可以作为1使用 (5-4-3-2-A)
+        A = None
+        result: list[tuple[str, int]] = []
+        for i in range(len(cards) - 3):
+            result.clear()
+            result.append(cards[i])
+            if cards[i][1] == 14 and A is None:
+                A = cards[i]
+            for j in range(i + 1, len(cards)):
+                pre_suit, pre_num = result[-1]
+                cur_suit, cur_num = cards[j]
+                if cur_num == pre_num:
+                    pass
+                elif cur_num + 1 == pre_num:
+                    result.append(cards[j])
+                else:
                     break
-            if consecutive:
-                return True, unique_sorted[i]
 
-        return False, 0
+            if A and result[-1][1] == 2:
+                result.append(A)
+
+            if len(result) >= 5:
+                return result
+
+            if not A and i == len(cards) - 4:
+                break
+        return None
 
 
 class CardEvaluator(QObject):
