@@ -4,7 +4,7 @@ board_cards:
   - 0.437
   size:
   - 0.255
-  - 0.050
+  - 0.052
 hand_cards:
   card1:
     pos:

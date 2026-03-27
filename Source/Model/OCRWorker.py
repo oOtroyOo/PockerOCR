@@ -39,8 +39,6 @@ class OCRWorker(threading.Thread):
         self.running = True
         os.makedirs("screenshot", exist_ok=True)
 
-        time.sleep(0.5)  # 等待窗口切换
-
         try:
             if self.hwnd and self.running:
                 # 捕获窗口
@@ -181,39 +179,45 @@ class OCRWorker(threading.Thread):
 
             # 预处理
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-            # 识别点数
-            cropped_num = gray[0 : int(h * delta), 0:w]
-
             # 二值化
-            _, binary = cv2.threshold(cropped_num, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
+            if False:  # 尝试xml
+                for i in range(13):
+                    # 5,6,7,8,9,10
+                    # 5,6
+                    # 5
+                    try:
+                        custom_config_xml = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm {i} -c tessedit_char_whitelist=AKQJT1023456789SCHD'
+
+                        data: bytes = pytesseract.image_to_alto_xml(binary, lang="poker", config=custom_config_xml)
+                        with open(f"screenshot/result-psm-{i}.xml", "wb") as file:
+                            file.write(data)
+                    except:
+                        ...
+
+            gray = None
             # OCR配置 - 使用本地 poker 模型识别点数
-            custom_config_number = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 7 -c tessedit_char_whitelist=AKQJT1023456789'
+            custom_config_number = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 5 -c tessedit_char_whitelist=AKQJT1023456789SCHD'
 
             text = pytesseract.image_to_string(binary, lang="poker", config=custom_config_number).strip()
             binary = None
-            # 识别花色
-            cropped_suit = gray[int(h * delta) : h, 0:w]
-            gray = None
-            _, binary = cv2.threshold(cropped_suit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            # OCR配置 - 使用本地 poker 模型识别花色
-            custom_config_suit = f'--tessdata-dir "{tessdata_dir}" --oem {self.config["ocr"]["oem"]} --psm 10 -c tessedit_char_whitelist=SHCD'
-            suit = pytesseract.image_to_string(binary, lang="poker", config=custom_config_suit).strip()
-            binary = None
-            if len(text) == 1 and len(suit) == 1:
+
+            if len(text) > 1:
+                image = None
+                num = text[0]
+                suit = text[1]
                 # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
-                if text == "0":
-                    text = "T"  # OCR 可能将 10 识别为 "0"
+                if num == "0" or num == "10":
+                    num = "T"  # OCR 可能将 10 识别为 "0"
                 # 将 rank 字符串转换为 int
-                rank_int = defines.NUMB_ORDER.get(text, 0)
+                rank_int = defines.NUMB_ORDER.get(num, 0)
                 return (suit, rank_int)
             else:
+                ...
                 if screenshot_debug_img:
-                    cv2.imwrite(f"screenshot/cropped_num.png", cropped_num)
-                    cv2.imwrite(f"screenshot/cropped_suit.png", cropped_suit)
-            cropped_num = None
-            cropped_suit = None
+                    cv2.imwrite(f"screenshot/cropped_num.png", image)
+            image = None
             return ("", "")
 
         except Exception as e:
