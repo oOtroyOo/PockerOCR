@@ -636,9 +636,10 @@ class PokerOCRWindow(QMainWindow):
         for i in range(len(self.hand_card_lables)):
             card_label = self.hand_card_lables[i]
 
-            if len(hand_cards) > i and hand_cards[i] and len(hand_cards[i][0]) > 0 and len(hand_cards[i][1]) > 0:
+            if len(hand_cards) > i and hand_cards[i] and len(hand_cards[i][0]) > 0 and hand_cards[i][1] is not None and hand_cards[i][1] > 0:
                 suit, rank = hand_cards[i]
-                card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
+                rank_str = defines.RANK_NAMES.get(rank, str(rank))
+                card_label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank_str)}")
                 card_label.setProperty("handCardActive", "true")
                 card_label.setProperty("handCardInactive", "")
                 card_label.setProperty("suitColor", defines.get_suit_color(suit))
@@ -652,9 +653,10 @@ class PokerOCRWindow(QMainWindow):
         # 更新牌池
         board_cards = result.board_cards or []
         for i, label in enumerate(self.board_labels):
-            if board_cards and i < len(board_cards) and board_cards[i] and len(board_cards[i][0]) > 0 and len(board_cards[i][1]) > 0:
+            if board_cards and i < len(board_cards) and board_cards[i] and len(board_cards[i][0]) > 0 and board_cards[i][1] is not None and board_cards[i][1] > 0:
                 suit, rank = board_cards[i]
-                label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank)}")
+                rank_str = defines.RANK_NAMES.get(rank, str(rank))
+                label.setText(f"{defines.charToCard(suit)}{defines.charToCard(rank_str)}")
                 label.setProperty("boardCardActive", "true")
                 label.setProperty("boardCardInactive", "")
                 label.setProperty("suitColor", defines.get_suit_color(suit))
@@ -672,8 +674,8 @@ class PokerOCRWindow(QMainWindow):
             self.last_result_key = result_key
 
             # 计算牌型：结果变化 + 有手牌 + 有3张以上池牌
-            valid_hand = len([c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 2
-            valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]) >= 3
+            valid_hand = len([c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0]) >= 2
+            valid_board = len([c for c in board_cards if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0]) >= 3
 
             if result_changed and valid_hand and valid_board:
                 # 显示加载提示
@@ -681,8 +683,8 @@ class PokerOCRWindow(QMainWindow):
                 self.my_possible_label.setText("计算中...")
                 self.opponent_label.setText("计算中...")
                 # 准备历史记录文本
-                hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in hand_cards])
-                board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(c[1])}" if c and len(c) >= 2 and c[0] and c[1] else "??" for c in board_cards])
+                hand_str = " | ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.RANK_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in hand_cards])
+                board_str = " ".join([f"{defines.charToCard(c[0])}{defines.charToCard(defines.RANK_NAMES.get(c[1], str(c[1])))}" if c and len(c) >= 2 and c[0] and c[1] is not None and c[1] > 0 else "??" for c in board_cards])
 
                 # 异步评估牌型
                 self.evaluation_pending = True

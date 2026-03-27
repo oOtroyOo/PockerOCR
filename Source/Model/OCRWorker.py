@@ -10,6 +10,7 @@ import mss
 from win32 import win32gui, win32print
 from win32.lib import win32con
 from win32.win32api import GetSystemMetrics
+from Source import defines
 
 screenshot_debug_img = os.path.exists("screenshot")
 
@@ -204,7 +205,9 @@ class OCRWorker(threading.Thread):
                 # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
                 if text == "0":
                     text = "T"  # OCR 可能将 10 识别为 "0"
-                return (suit, text)
+                # 将 rank 字符串转换为 int
+                rank_int = defines.RANK_ORDER.get(text, 0)
+                return (suit, rank_int)
             else:
                 if screenshot_debug_img:
                     cv2.imwrite(f"screenshot/cropped_num.png", cropped_num)

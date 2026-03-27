@@ -16,7 +16,7 @@ from Source import defines
 class CardButton(QPushButton):
     """单张卡牌按钮"""
 
-    def __init__(self, suit: str, rank: str, parent: ManualChooseDialog):
+    def __init__(self, suit: str, rank: int, parent: ManualChooseDialog):
         super().__init__(parent)
         self.suit = suit
         self.rank = rank

@@ -20,11 +20,11 @@ RANK_NAMES = {2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10
 SUIT_SYMBOLS = {"S": ("♠", "黑桃", "black"), "C": ("♣", "梅花", "black"), "H": ("♥", "红桃", "red"), "D": ("♦", "方片", "red")}
 
 
-# 所有可能的牌
+# 所有可能的牌 (suit: str, rank: int)
 all_suits = [x for x in SUIT_SYMBOLS]
-all_ranks = [x for x in RANK_ORDER]
-all_ranks.reverse()
-all_cards: list[tuple[str, str]] = [(s, r) for s in all_suits for r in all_ranks]
+all_ranks = list(RANK_ORDER.values())  # [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+all_ranks.reverse()  # [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2]
+all_cards: list[tuple[str, int]] = [(s, r) for s in all_suits for r in all_ranks]
 
 @staticmethod
 def get_suit_color(suit):
@@ -46,17 +46,17 @@ def charToCard(c: str):
 
 
 @staticmethod
-def cardToStr(card: tuple[str, str]):
+def cardToStr(card: tuple[str, int]):
     if not card or len(card) < 2:
         return "??"
     suit, rank = card
     suit_sym = SUIT_SYMBOLS.get(suit, [])[0]
-    rank_name = RANK_NAMES.get(RANK_ORDER.get(rank, 0), rank)
+    rank_name = RANK_NAMES.get(rank, str(rank))
     return f"{charToCard(suit_sym)}{charToCard(rank_name)}"
 
 
 @staticmethod
-def cardToStrRichFont(card: tuple[str, str]):
+def cardToStrRichFont(card: tuple[str, int]):
     if not card or len(card) < 2:
         return "??"
     suit, rank = card

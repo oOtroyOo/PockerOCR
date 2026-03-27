@@ -11,9 +11,9 @@ class ManualChooseDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.selected_hand: set[Tuple[str, str]] = set()  # 手牌
-        self.selected_board: set[Tuple[str, str]] = set()  # 牌池
-        self.card_buttons: dict[Tuple[str, str], CardButton] = {}
+        self.selected_hand: set[Tuple[str, int]] = set()  # 手牌
+        self.selected_board: set[Tuple[str, int]] = set()  # 牌池
+        self.card_buttons: dict[Tuple[str, int], CardButton] = {}
 
         self.setWindowTitle("手动选择牌型")
         # self.resize(900, 700)
@@ -105,7 +105,7 @@ class ManualChooseDialog(QDialog):
                     # style.unpolish(self)
                     style.polish(label)
             except:
-                label.setText(None)
+                label.setText('')
         for label in self.board_labels:
             try:
                 card = next(iter_boards)
@@ -116,7 +116,7 @@ class ManualChooseDialog(QDialog):
                     # style.unpolish(self)
                     style.polish(label)
             except:
-                label.setText(None)
+                label.setText('')
 
     def SuitSection(self, suit_code: str):
         symbol, name, color = defines.SUIT_SYMBOLS[suit_code]
@@ -177,7 +177,7 @@ class ManualChooseDialog(QDialog):
     def clear_all(self):
         pass
 
-    def get_selected_cards(self) -> Tuple[set[Tuple[str, str]], set[Tuple[str, str]]]:
+    def get_selected_cards(self) -> Tuple[set[Tuple[str, int]], set[Tuple[str, int]]]:
         """获取选中的牌
         Returns:
             (手牌列表, 牌池列表)

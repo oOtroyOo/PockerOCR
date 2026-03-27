@@ -126,7 +126,7 @@ class CardEvaluatorWorker(QObject):
     def _full_evaluate(self, hand_cards: list, board_cards: list) -> EvaluationResult:
         """完整评估"""
         # 合并所有牌（过滤空值）
-        all_cards = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]] + [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]
+        all_cards = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1] is not None] + [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1] is not None]
 
         # 我的牌型（手牌 + 牌池最佳组合）
         my_hand = self._evaluate_best_hand(all_cards)
@@ -179,8 +179,8 @@ class CardEvaluatorWorker(QObject):
             (my_possible, opponent_possible)
         """
         # 过滤空值
-        board_cards = [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1]]
-        hand_cards = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1]]
+        board_cards = [c for c in board_cards if c and len(c) >= 2 and c[0] and c[1] is not None]
+        hand_cards = [c for c in hand_cards if c and len(c) >= 2 and c[0] and c[1] is not None]
 
         known_cards = board_cards + hand_cards
 
@@ -214,7 +214,7 @@ class CardEvaluatorWorker(QObject):
             for name, card_list in my_possible.items():
                 card_list.sort(
                     key=lambda cards: sum(
-                        [(index * 100 + (defines.RANK_ORDER.get(cards[index][1], 0) * 10 + (4 - defines.all_suits.index(cards[index][0])))) for index in range(len(cards))]
+                        [(index * 100 + (cards[index][1] * 10 + (4 - defines.all_suits.index(cards[index][0])))) for index in range(len(cards))]
                     ),
                     reverse=True,
                 )
@@ -280,7 +280,7 @@ class CardEvaluatorWorker(QObject):
             max_workers = cpu_count - 2
         else:
             max_workers = 8
-
+        max_workers = 1
         # 将任务分批处理，每批处理多个组合
         batch_size = max(1, len(combos) // max_workers)
         batches = [combos[i : i + batch_size] for i in range(0, len(combos), batch_size)]
@@ -345,7 +345,7 @@ class CardEvaluatorWorker(QObject):
                         elif result.rank == my_hand.rank:
                             skip = False
                             for i in range(min(len(my_hand.cards), len(result.cards))):
-                                if defines.RANK_ORDER.get(my_hand.cards[i][1], 0) > defines.RANK_ORDER.get(result.cards[i][1], 0):
+                                if my_hand.cards[i][1] > result.cards[i][1]:
                                     skip = True
                                     break
                             if skip:
@@ -373,7 +373,7 @@ class CardEvaluatorWorker(QObject):
         """
         suits = [c[0] for c in cards]
         ranks = [c[1] for c in cards]
-        rank_values = sorted([defines.RANK_ORDER.get(r, 0) for r in ranks], reverse=True)
+        rank_values = sorted(ranks, reverse=True)
 
         # 统计
         suit_counts = Counter(suits)
@@ -389,7 +389,7 @@ class CardEvaluatorWorker(QObject):
         count_values = sorted(rank_counts.values(), reverse=True)
 
         # 定义排序key函数
-        num_sort = lambda x: defines.RANK_ORDER.get(x[1], 0)
+        num_sort = lambda x: x[1]  # rank 已经是 int
         suit_sort = lambda x: 4 - defines.all_suits.index(x[0])
 
         # 皇家同花顺
@@ -397,31 +397,31 @@ class CardEvaluatorWorker(QObject):
             cards.sort(key=num_sort, reverse=True)
             return HandResult("皇家同花顺", 10, 14, [], cards)
 
-        # 同花顺
+        # 同花顺 (A-2-3-4-5 顺子中 A 作为 1)
         if is_flush and is_straight:
-            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == "A") else num_sort(x), reverse=True)
+            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == 14) else num_sort(x), reverse=True)
             return HandResult("同花顺", 9, straight_high, [], cards)
 
         # 四条
         if count_values == [4, 1]:
             four_rank = [r for r, c in rank_counts.items() if c == 4][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == four_rank else num_sort(x), reverse=True)
-            return HandResult("四条", 8, defines.RANK_ORDER.get(four_rank, 0), rank_values, cards)
+            return HandResult("四条", 8, four_rank, rank_values, cards)
 
         # 葫芦
         if count_values == [3, 2]:
             three_rank = [r for r, c in rank_counts.items() if c == 3][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("葫芦", 7, defines.RANK_ORDER.get(three_rank, 0), rank_values, cards)
+            return HandResult("葫芦", 7, three_rank, rank_values, cards)
 
         # 同花
         if is_flush:
             cards.sort(key=num_sort, reverse=True)
             return HandResult("同花", 6, rank_values[0], rank_values, cards)
 
-        # 顺子
+        # 顺子 (A-2-3-4-5 顺子中 A 作为 1)
         if is_straight:
-            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == "A") else num_sort(x), reverse=True)
+            cards.sort(key=lambda x: 0 if (straight_high == 5 and x[1] == 14) else num_sort(x), reverse=True)
             return HandResult("顺子", 5, straight_high, [], cards)
 
         if skip_min:
@@ -431,11 +431,11 @@ class CardEvaluatorWorker(QObject):
         if count_values == [3, 1, 1]:
             three_rank = [r for r, c in rank_counts.items() if c == 3][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == three_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("三条", 4, defines.RANK_ORDER.get(three_rank, 0), rank_values, cards)
+            return HandResult("三条", 4, three_rank, rank_values, cards)
 
         # 两对
         if count_values == [2, 2, 1]:
-            pairs = sorted([defines.RANK_ORDER.get(r, 0) for r, c in rank_counts.items() if c == 2], reverse=True)
+            pairs = sorted([r for r, c in rank_counts.items() if c == 2], reverse=True)
             cards.sort(key=lambda x: num_sort(x) * (1000 if num_sort(x) in pairs else 10) + suit_sort(x), reverse=True)
             return HandResult("两对", 3, pairs[0], pairs, cards)
 
@@ -443,7 +443,7 @@ class CardEvaluatorWorker(QObject):
         if count_values == [2, 1, 1, 1]:
             pair_rank = [r for r, c in rank_counts.items() if c == 2][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == pair_rank else (num_sort(x) * 10 + suit_sort(x)), reverse=True)
-            return HandResult("一对", 2, defines.RANK_ORDER.get(pair_rank, 0), rank_values, cards)
+            return HandResult("一对", 2, pair_rank, rank_values, cards)
 
         # 高牌
         cards.sort(key=num_sort, reverse=True)
