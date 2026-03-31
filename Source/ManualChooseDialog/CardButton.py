@@ -57,7 +57,7 @@ class CardButton(QPushButton):
         self.update()
 
     def mousePressEvent(self, event):
-        print(f"{event.button()}键按下")
+        # print(f"{event.button()}键按下")
         # 左键
         if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
             if self.card:
@@ -67,8 +67,10 @@ class CardButton(QPushButton):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            print("左键松开")
+            # print("左键松开")
+            ...
         elif event.button() == Qt.MouseButton.RightButton:
-            print("右键松开")
+            # print("右键松开")
+            ...
 
         super().mouseReleaseEvent(event)

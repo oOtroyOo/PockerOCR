@@ -37,7 +37,7 @@ class OCRWorker(threading.Thread):
     def run(self):
         """单次扫描"""
         self.running = True
-        os.makedirs("screenshot", exist_ok=True)
+        # os.makedirs("screenshot", exist_ok=True)
 
         try:
             if self.hwnd and self.running:

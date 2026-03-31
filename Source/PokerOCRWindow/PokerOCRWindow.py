@@ -10,7 +10,6 @@ import time
 import threading
 import cv2
 import numpy as np
-import requests
 from PyQt5.QtWidgets import (
     QLayout,
     QMainWindow,
@@ -260,36 +259,36 @@ class PokerOCRWindow(QMainWindow):
         layout.addWidget(scroll_area, 1)
         return layout
 
-    def handle_link(self, link_value):
+    # def handle_link(self, link_value):
 
-        try:
-            # 从config.yaml获取仓库信息，默认为当前项目
-            repo_owner = "tesseract-ocr"
-            repo_name = "tesserac"
+    #     try:
+    #         # 从config.yaml获取仓库信息，默认为当前项目
+    #         repo_owner = "tesseract-ocr"
+    #         repo_name = "tesserac"
 
-            # 调用GitHub API获取最新release
-            url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
+    #         # 调用GitHub API获取最新release
+    #         url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases"
+    #         response = requests.get(url, timeout=10)
+    #         response.raise_for_status()
 
-            release_data = response.json()
+    #         release_data = response.json()
 
-            # 查找exe文件
-            exe_url = None
-            for asset in release_data.get("assets", []):
-                if asset["name"].endswith(".exe"):
-                    exe_url = asset["browser_download_url"]
-                    break
+    #         # 查找exe文件
+    #         exe_url = None
+    #         for asset in release_data.get("assets", []):
+    #             if asset["name"].endswith(".exe"):
+    #                 exe_url = asset["browser_download_url"]
+    #                 break
 
-            if exe_url:
-                QDesktopServices.openUrl(exe_url)
-            else:
-                QMessageBox.warning(self, "提示", "未找到可执行文件(.exe)")
+    #         if exe_url:
+    #             QDesktopServices.openUrl(exe_url)
+    #         else:
+    #             QMessageBox.warning(self, "提示", "未找到可执行文件(.exe)")
 
-        except requests.exceptions.RequestException as e:
-            QMessageBox.critical(self, "错误", f"网络请求失败: {str(e)}")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"发生错误: {str(e)}")
+    #     except requests.exceptions.RequestException as e:
+    #         QMessageBox.critical(self, "错误", f"网络请求失败: {str(e)}")
+    #     except Exception as e:
+    #         QMessageBox.critical(self, "错误", f"发生错误: {str(e)}")
 
     def create_result_panel(self):
         """创建结果显示面板"""

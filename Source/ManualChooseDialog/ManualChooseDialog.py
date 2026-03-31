@@ -136,6 +136,7 @@ class ManualChooseDialog(QDialog):
         if type == Qt.MouseButton.LeftButton:
             if card in self.selected_board:
                 self.selected_board.remove(card)
+
             if card in self.selected_hand:
                 self.selected_hand.remove(card)
             elif len(self.selected_hand) < 2:
@@ -143,6 +144,7 @@ class ManualChooseDialog(QDialog):
         elif type == Qt.MouseButton.RightButton:
             if card in self.selected_hand:
                 self.selected_hand.remove(card)
+
             if card in self.selected_board:
                 self.selected_board.remove(card)
             elif len(self.selected_board) < 5:

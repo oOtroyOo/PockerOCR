@@ -12,6 +12,9 @@ from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import os
 from typing import Optional
 from Source import defines
+from concurrent.futures import ThreadPoolExecutor
+
+MAX_COMBOS = 5000
 
 
 class HandResult(NamedTuple):
@@ -276,7 +279,6 @@ class CardEvaluatorWorker(QObject):
         results = []
 
         # 如果组合数量太大，限制处理数量以避免长时间阻塞
-        MAX_COMBOS = 5000
         if len(combos) > MAX_COMBOS:
             combos = combos[:MAX_COMBOS]
 
@@ -284,8 +286,7 @@ class CardEvaluatorWorker(QObject):
         if len(combos) < 100:
             return self._evaluate_batch(combos, base_cards, min_rank, my_hand, is_opponent)
 
-        # 使用线程池（对于小任务粒度，线程比进程开销小）
-        from concurrent.futures import ThreadPoolExecutor
+
         cpu_count = os.cpu_count() or 4
         max_workers = min(4, cpu_count)
 
@@ -293,6 +294,7 @@ class CardEvaluatorWorker(QObject):
         batch_size = max(1, len(combos) // max_workers)
         batches = [combos[i : i + batch_size] for i in range(0, len(combos), batch_size)]
 
+        # 使用线程池（对于小任务粒度，线程比进程开销小）
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有批次的任务
             future_to_batch = {executor.submit(self._evaluate_batch, batch, base_cards, min_rank, my_hand, is_opponent): batch for batch in batches}
