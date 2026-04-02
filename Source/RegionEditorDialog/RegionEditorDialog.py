@@ -20,6 +20,7 @@ class RegionEditorDialog(QDialog):
         self.region_key = region_key
         self.region_name = region_name
         self.region = self.get_current_region()
+        self.init_region = dict(self.region)
         self.init_ui()
         self.update_preview()
 
@@ -139,11 +140,11 @@ class RegionEditorDialog(QDialog):
         painter = QPainter(scaled_pixmap)
 
         # 居中对齐：pos为中心点，size为宽高
-        cx = int(self.region.get("pos", {})[0] * scaled_w)
-        cy = int(self.region.get("pos", {})[1] * scaled_h)
-        rw = int(self.region.get("size", {})[0] * scaled_w)
-        rh = int(self.region.get("size", {})[1] * scaled_h)
-        rotation = self.region.get("r", 0)
+        cx = int(self.init_region.get("pos", {})[0] * scaled_w)
+        cy = int(self.init_region.get("pos", {})[1] * scaled_h)
+        rw = int(self.init_region.get("size", {})[0] * scaled_w)
+        rh = int(self.init_region.get("size", {})[1] * scaled_h)
+        rotation = self.init_region.get("r", 0)
 
         pen = QPen(QColor("#2196F3"), 2)
         pen.setStyle(Qt.PenStyle.DashLine)
@@ -153,24 +154,15 @@ class RegionEditorDialog(QDialog):
             self.draw_rotated_rect_center(painter, cx, cy, rw, rh, rotation)
         else:
             painter.drawRect(cx - rw // 2, cy - rh // 2, rw, rh)
+        # 居中对齐：pos为中心点，size为宽高
+        cx = int(self.region.get("pos", {})[0] * scaled_w)
+        cy = int(self.region.get("pos", {})[1] * scaled_h)
+        rw = int(self.region.get("size", {})[0] * scaled_w)
+        rh = int(self.region.get("size", {})[1] * scaled_h)
+        rotation = self.region.get("r", 0)
 
         # 绘制实线框（用户框选区域或拖拽区域）
-        if hasattr(self, "user_region") and self.user_region:
-            ucx, ucy, urw, urh = self.user_region
-            ucx = int(ucx * scaled_w)
-            ucy = int(ucy * scaled_h)
-            urw = int(urw * scaled_w)
-            urh = int(urh * scaled_h)
-            pen.setStyle(Qt.PenStyle.SolidLine)
-            pen.setColor(QColor("#f44336"))
-            pen.setWidth(3)
-            painter.setPen(pen)
-
-            if rotation != 0:
-                self.draw_rotated_rect_center(painter, ucx, ucy, urw, urh, rotation)
-            else:
-                painter.drawRect(ucx - urw // 2, ucy - urh // 2, urw, urh)
-        elif self.image_label.is_dragging and self.image_label.start_pos and self.image_label.current_pos:
+        if self.image_label.is_dragging and self.image_label.start_pos and self.image_label.current_pos:
             # 绘制拖拽框
             start = self.image_label.start_pos
             current = self.image_label.current_pos
@@ -194,7 +186,21 @@ class RegionEditorDialog(QDialog):
                 pen.setWidth(2)
                 painter.setPen(pen)
                 painter.drawRect(cx - rw // 2, cy - rh // 2, rw, rh)
+        elif hasattr(self, "user_region") and self.user_region:
+            ucx, ucy, urw, urh = self.user_region
+            ucx = int(ucx * scaled_w)
+            ucy = int(ucy * scaled_h)
+            urw = int(urw * scaled_w)
+            urh = int(urh * scaled_h)
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            pen.setColor(QColor("#f44336"))
+            pen.setWidth(3)
+            painter.setPen(pen)
 
+            if rotation != 0:
+                self.draw_rotated_rect_center(painter, ucx, ucy, urw, urh, rotation)
+            else:
+                painter.drawRect(ucx - urw // 2, ucy - urh // 2, urw, urh)
         painter.end()
 
         self.image_label.setPixmap(scaled_pixmap)
