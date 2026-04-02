@@ -11,7 +11,6 @@ import threading
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import (
-    QLayout,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -28,8 +27,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QApplication,
 )
-from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QUrl
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 import win32gui
 import yaml
 import subprocess
@@ -452,7 +450,16 @@ class PokerOCRWindow(QMainWindow):
         # 开始扫描
         self.is_scanning = True
         # 将窗口置于前端
-        win32gui.SetForegroundWindow(self.current_hwnd)
+        try:
+            # 如果窗口最小化，先恢复
+            if win32gui.IsIconic(self.current_hwnd):
+                win32gui.ShowWindow(self.current_hwnd, 9)  # SW_RESTORE
+                time.sleep(0.3)
+            win32gui.SetForegroundWindow(self.current_hwnd)
+            time.sleep(0.5)  # 等待窗口切换
+        except Exception as e:
+            QMessageBox.warning(self, "警告", f"无法置顶窗口: {str(e)}")
+            return
         self.do_single_scan()
 
     def do_single_scan(self):
@@ -719,6 +726,7 @@ class PokerOCRWindow(QMainWindow):
         if st_bar:
             st_bar.showMessage(f"错误: {error_msg}")
         self.history_text.append(f"[错误] {error_msg}")
+        self.schedule_next_scan()
 
     def open_region_editor(self, region_key, region_name):
         """打开区域编辑器"""
@@ -732,6 +740,10 @@ class PokerOCRWindow(QMainWindow):
 
         # 将窗口置于前端
         try:
+            # 如果窗口最小化，先恢复
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, 9)  # SW_RESTORE
+                time.sleep(0.3)
             win32gui.SetForegroundWindow(hwnd)
             time.sleep(0.5)  # 等待窗口切换
         except Exception as e:

@@ -20,6 +20,8 @@ all_cards: list[tuple[str, int]] = [(s, r) for s in all_suits for r in all_ranks
 
 @staticmethod
 def get_suit_color(suit):
+    if not suit:
+        return ''
     return SUIT_SYMBOLS[suit][2]
 
 

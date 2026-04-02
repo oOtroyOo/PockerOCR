@@ -12,10 +12,8 @@ from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPolygonF
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 import typing
-from win32 import win32gui, win32print
 from win32.lib import win32con
 from win32.win32api import GetSystemMetrics
-import Source.defines as defines
 
 class RegionEditorDialog(QDialog):
     """区域编辑对话框"""

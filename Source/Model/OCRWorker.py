@@ -7,7 +7,7 @@ import numpy as np
 from PyQt5.QtCore import pyqtSignal, QObject
 import pytesseract
 import mss
-from win32 import win32gui, win32print
+from win32 import win32gui, win32print, win32api
 from win32.lib import win32con
 from win32.win32api import GetSystemMetrics
 from Source import defines
@@ -48,23 +48,31 @@ class OCRWorker(threading.Thread):
                     result = self.recognize_cards(screenshot)
                     screenshot = None
                     self.signals.result_updated.emit(result)
+                else:
+                    self.signals.error_occurred.emit(f"扫描错误: 没有找到窗口")
         except Exception as e:
             self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
 
     def capture_window(self, hwnd):
-        """捕获窗口截图（使用MSS + DXGI）"""
+        """捕获窗口截图（使用MSS + DXGI），仅抓取客户区"""
         try:
-            title = win32gui.GetWindowText(hwnd)
+            # title = win32gui.GetWindowText(hwnd)
+            ## 获取窗口位置和尺寸
+            # left, top, right, bottom = win32gui.GetWindowRect(hwnd)
 
-            # 获取窗口位置和尺寸
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+            # 获取窗口客户区左上角相对于屏幕的坐标
+            client_rect = win32gui.GetClientRect(hwnd)
+            if client_rect == (0, 0, 0, 0):
+                return None
+            left, top = win32gui.ClientToScreen(hwnd, (client_rect[0], client_rect[1]))
+            right, bottom = win32gui.ClientToScreen(hwnd, (client_rect[2], client_rect[3]))
             width = right - left
             height = bottom - top
 
             # 在每次捕获时创建新的mss实例，避免线程问题
             sct = mss.mss()
 
-            # 使用MSS截取指定区域（窗口区域）
+            # 使用MSS截取客户区区域
             monitor = {"top": top, "left": left, "width": width, "height": height}
             screenshot = sct.grab(monitor)
 
@@ -74,19 +82,15 @@ class OCRWorker(threading.Thread):
             # 转换BGRA到BGR
             img1 = cv2.cvtColor(img0, cv2.COLOR_BGRA2BGR)
             img0 = None
-            # 剔除Windows标题栏
-            title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
-            border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
-            border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
-            # 调整窗口区域，只截取客户区
-            img = img1[title_bar_height + border_height : height - border_height, border_width : width - border_width]
-            img1 = None
+            # title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
+            # border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
+            # border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
 
             # 保存调试图像
             if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/screenshot.png", img)
+                cv2.imwrite(f"screenshot/screenshot.png", img1)
 
-            return img
+            return img1
 
         except Exception as e:
             self.signals.error_occurred.emit(f"截图错误: {str(e)}")
@@ -207,12 +211,13 @@ class OCRWorker(threading.Thread):
                 image = None
                 num = text[0]
                 suit = text[1]
-                # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
-                if num == "0" or num == "10":
-                    num = "T"  # OCR 可能将 10 识别为 "0"
-                # 将 rank 字符串转换为 int
-                rank_int = defines.NUMB_ORDER.get(num, 0)
-                return (suit, rank_int)
+                if (num in "AKQJT1023456789") and (suit in "SCHD"):
+                    # 将 "10" 转换为 "T" 以匹配 RANK_ORDER
+                    if num == "0" or num == "10":
+                        num = "T"  # OCR 可能将 10 识别为 "0"
+                    # 将 rank 字符串转换为 int
+                    rank_int = defines.NUMB_ORDER.get(num, 0)
+                    return (suit, rank_int)
             else:
                 ...
                 if screenshot_debug_img:
