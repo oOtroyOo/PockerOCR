@@ -383,7 +383,7 @@ class CardEvaluatorWorker(QObject):
         if any([x == 4 for x in rank_counts.values()]):
             four_rank = [r for r, c in rank_counts.items() if c == 4][0]
             cards.sort(key=lambda x: (1000 + suit_sort(x)) if x[1] == four_rank else num_sort(x), reverse=True)
-            return HandResult(8, four_rank, ranks, cards)
+            return HandResult(8, four_rank, ranks, cards[:5])
 
         cards.sort(key=num_sort, reverse=True)
 
