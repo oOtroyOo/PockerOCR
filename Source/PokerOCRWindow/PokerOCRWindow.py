@@ -37,7 +37,7 @@ from Source.Model.OCRWorker import OCRWorker
 from Source.RegionEditorDialog.RegionEditorDialog import RegionEditorDialog
 from Source.Model.CardEvaluator import CardEvaluator
 from Source.ManualChooseDialog.ManualChooseDialog import ManualChooseDialog
-
+from Source.Model.CapureWindow import capture_window, screenshot_debug_img
 
 class PokerOCRWindow(QMainWindow):
     """主窗口"""
@@ -751,7 +751,7 @@ class PokerOCRWindow(QMainWindow):
             return
 
         # 截图
-        screenshot = self.capture_window(hwnd)
+        screenshot = capture_window(hwnd)
         if screenshot is None:
             QMessageBox.warning(self, "警告", "截图失败")
             return
@@ -768,28 +768,7 @@ class PokerOCRWindow(QMainWindow):
         else:
             QMessageBox.information(self, "提示", "已取消区域编辑")
 
-    def capture_window(self, hwnd):
-        """捕获窗口截图"""
-        try:
-            # 获取窗口位置和尺寸
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-            width = right - left
-            height = bottom - top
 
-            # 使用MSS截取
-            sct = mss.mss()
-            monitor = {"top": top, "left": left, "width": width, "height": height}
-            screenshot = sct.grab(monitor)
-
-            # 转换为numpy数组
-            img = np.array(screenshot)
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-            return img
-
-        except Exception as e:
-            print(f"截图错误: {str(e)}")
-            return None
 
     def save_config(self, config):
         """保存配置到文件"""

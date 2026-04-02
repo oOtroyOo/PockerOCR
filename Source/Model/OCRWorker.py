@@ -11,8 +11,7 @@ from win32 import win32gui, win32print, win32api
 from win32.lib import win32con
 from win32.win32api import GetSystemMetrics
 from Source import defines
-
-screenshot_debug_img = os.path.exists("screenshot")
+from Source.Model.CapureWindow import capture_window, screenshot_debug_img
 
 
 class WorkerSignals(QObject):
@@ -42,59 +41,16 @@ class OCRWorker(threading.Thread):
         try:
             if self.hwnd and self.running:
                 # 捕获窗口
-                screenshot = self.capture_window(self.hwnd)
+                screenshot = capture_window(self.hwnd)
                 if screenshot is not None:
                     # 识别手牌和牌池
                     result = self.recognize_cards(screenshot)
                     screenshot = None
                     self.signals.result_updated.emit(result)
                 else:
-                    self.signals.error_occurred.emit(f"扫描错误: 没有找到窗口")
+                    self.signals.error_occurred.emit(f"扫描错误: 没有截图")
         except Exception as e:
             self.signals.error_occurred.emit(f"扫描错误: {str(e)}")
-
-    def capture_window(self, hwnd):
-        """捕获窗口截图（使用MSS + DXGI），仅抓取客户区"""
-        try:
-            # title = win32gui.GetWindowText(hwnd)
-            ## 获取窗口位置和尺寸
-            # left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-
-            # 获取窗口客户区左上角相对于屏幕的坐标
-            client_rect = win32gui.GetClientRect(hwnd)
-            if client_rect == (0, 0, 0, 0):
-                return None
-            left, top = win32gui.ClientToScreen(hwnd, (client_rect[0], client_rect[1]))
-            right, bottom = win32gui.ClientToScreen(hwnd, (client_rect[2], client_rect[3]))
-            width = right - left
-            height = bottom - top
-
-            # 在每次捕获时创建新的mss实例，避免线程问题
-            sct = mss.mss()
-
-            # 使用MSS截取客户区区域
-            monitor = {"top": top, "left": left, "width": width, "height": height}
-            screenshot = sct.grab(monitor)
-
-            # 转换为numpy数组（BGRA格式）
-            img0 = np.array(screenshot)
-            screenshot = None
-            # 转换BGRA到BGR
-            img1 = cv2.cvtColor(img0, cv2.COLOR_BGRA2BGR)
-            img0 = None
-            # title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
-            # border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
-            # border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
-
-            # 保存调试图像
-            if screenshot_debug_img:
-                cv2.imwrite(f"screenshot/screenshot.png", img1)
-
-            return img1
-
-        except Exception as e:
-            self.signals.error_occurred.emit(f"截图错误: {str(e)}")
-            return None
 
     def recognize_cards(self, image):
         """识别手牌和牌池"""
@@ -120,11 +76,14 @@ class OCRWorker(threading.Thread):
         pos_list = board_cards.get("pos", [0, 0])
         size_list = board_cards.get("size", [0, 0])
 
-        x = int(pos_list[0] * w)
-        y = int(pos_list[1] * h)
+        # 居中对齐：pos为中心点，size为宽高
+        center_x = int(pos_list[0] * w)
+        center_y = int(pos_list[1] * h)
         area_w = int(size_list[0] * w)
         area_h = int(size_list[1] * h)
-        card_width = int(size_list[0] * 0.2 * 0.4 * w)
+        x = center_x - area_w // 2
+        y = center_y - area_h // 2
+        card_width = int(area_w * 0.2 * 0.4)
 
         # 先裁剪牌池区域
         board_region = image[y : y + area_h, x : x + area_w]
@@ -151,15 +110,18 @@ class OCRWorker(threading.Thread):
         size_list = pos.get("size", [0, 0])
         rotation = pos.get("r", 0)
         h, w = image.shape[:2]
-        x = int(pos_list[0] * w)
-        y = int(pos_list[1] * h)
+        # 居中对齐
+        center_x = int(pos_list[0] * w)
+        center_y = int(pos_list[1] * h)
         pw = int(size_list[0] * w)
         ph = int(size_list[1] * h)
+        x = center_x - pw // 2
+        y = center_y - ph // 2
 
         # 如果有旋转，先旋转再裁剪
         if rotation != 0:
             # 创建旋转矩阵
-            center = (x + pw // 2, y + ph // 2)
+            center = (center_x, center_y)
             M = cv2.getRotationMatrix2D(center, rotation, 1.0)
             # 旋转图像
             rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)

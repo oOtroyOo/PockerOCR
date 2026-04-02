@@ -1,32 +1,16 @@
 import cv2
-from PyQt5.QtWidgets import (
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QDialog,
-    QSlider,
-    QDoubleSpinBox,
-)
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog, QSlider, QDoubleSpinBox, QFormLayout, QGroupBox  # 新增  # 新增
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPolygonF
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 import typing
-from win32.lib import win32con
-from win32.win32api import GetSystemMetrics
+
 
 class RegionEditorDialog(QDialog):
     """区域编辑对话框"""
 
     def __init__(self, parent, image, current_config, region_key, region_name):
         super().__init__(parent)
-        h, w = image.shape[:2]
-        # 剔除Windows标题栏
-        title_bar_height = GetSystemMetrics(win32con.SM_CYCAPTION) + 4
-        border_width = GetSystemMetrics(win32con.SM_CXSIZEFRAME) + 4
-        border_height = GetSystemMetrics(win32con.SM_CYSIZEFRAME) + 4
-        # 调整窗口区域，只截取客户区
-        image = image[title_bar_height + border_height : h - border_height, border_width : w - border_width]
         h, w = image.shape[:2]
         # 转换为QPixmap
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -53,10 +37,9 @@ class RegionEditorDialog(QDialog):
     def init_ui(self):
         """初始化UI"""
         self.setWindowTitle(f"区域编辑 - {self.region_name}")
-        # self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        # self.setMinimumSize(600, 500)
-        # self.resize(self.pixmap.width(), self.pixmap.height())
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(12, 12, 12, 12)
 
         # 图片预览
         self.image_label = ClickableLabel()
@@ -68,59 +51,73 @@ class RegionEditorDialog(QDialog):
         self.image_label.set_release_callback(self.on_image_release)
         layout.addWidget(self.image_label)
 
-        # 控制面板
-        control_layout = QHBoxLayout()
+        # 控制面板分组
+        control_group = QGroupBox("区域参数")
+        form_layout = QFormLayout()
+        form_layout.setContentsMargins(8, 8, 8, 8)
+        form_layout.setSpacing(8)
+
+        # 区域尺寸控制
+        self.x_spin = QDoubleSpinBox()
+        self.x_spin.setDecimals(4)
+        self.x_spin.setRange(0.001, 0.999)
+        self.x_spin.setSingleStep(0.001)
+        self.x_spin.setValue(self.region.get("pos", [0, 0])[0])
+        self.x_spin.valueChanged.connect(self.on_region_changed)
+        form_layout.addRow(QLabel("X中心:"), self.x_spin)
+
+        self.y_spin = QDoubleSpinBox()
+        self.y_spin.setDecimals(4)
+        self.y_spin.setRange(0.001, 0.999)
+        self.y_spin.setSingleStep(0.001)
+        self.y_spin.setValue(self.region.get("pos", [0, 0])[1])
+        self.y_spin.valueChanged.connect(self.on_region_changed)
+        form_layout.addRow(QLabel("Y中心:"), self.y_spin)
+
+        self.width_spin = QDoubleSpinBox()
+        self.width_spin.setDecimals(4)
+        self.width_spin.setRange(0.001, 0.999)
+        self.width_spin.setSingleStep(0.001)
+        self.width_spin.setValue(self.region.get("size", [0, 0])[0])
+        self.width_spin.valueChanged.connect(self.on_region_changed)
+        form_layout.addRow(QLabel("宽度:"), self.width_spin)
+
+        self.height_spin = QDoubleSpinBox()
+        self.height_spin.setDecimals(4)
+        self.height_spin.setRange(0.001, 0.999)
+        self.height_spin.setSingleStep(0.001)
+        self.height_spin.setValue(self.region.get("size", [0, 0])[1])
+        self.height_spin.valueChanged.connect(self.on_region_changed)
+        form_layout.addRow(QLabel("高度:"), self.height_spin)
 
         # 旋转滑块
         if self.region.get("r", None):
-            control_layout.addWidget(QLabel("旋转角度:"))
             self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
             self.rotation_slider.setRange(-45, 45)
             self.rotation_slider.setValue(int(self.region["r"]))
             self.rotation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.rotation_slider.setTickInterval(5)
             self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
-            control_layout.addWidget(self.rotation_slider)
             self.rotation_label = QLabel(f"{self.region['r']}°")
-            control_layout.addWidget(self.rotation_label)
-
-        # 区域尺寸控制
-        control_layout.addWidget(QLabel("宽度:"))
-        self.width_spin = QDoubleSpinBox()
-        self.width_spin.setRange(0.01, 0.99)
-        self.width_spin.setSingleStep(0.01)
-        self.width_spin.setValue(self.region.get("size", [])[0])
-        self.width_spin.valueChanged.connect(self.on_region_changed)
-        control_layout.addWidget(self.width_spin)
-
-        control_layout.addWidget(QLabel("高度:"))
-        self.height_spin = QDoubleSpinBox()
-        self.height_spin.setRange(0.01, 0.99)
-        self.height_spin.setSingleStep(0.01)
-        self.height_spin.setValue(self.region.get("size", [])[1])
-        self.height_spin.valueChanged.connect(self.on_region_changed)
-        control_layout.addWidget(self.height_spin)
-
-        layout.addLayout(control_layout)
-
+            rot_layout = QHBoxLayout()
+            rot_layout.addWidget(self.rotation_slider)
+            rot_layout.addWidget(self.rotation_label)
+            form_layout.addRow(QLabel("旋转角度:"), rot_layout)
         # 按钮布局
         button_layout = QHBoxLayout()
-
+        button_layout.addStretch()
         reset_btn = QPushButton("重置")
         reset_btn.clicked.connect(self.reset_region)
         button_layout.addWidget(reset_btn)
-
-        button_layout.addStretch()
-
         cancel_btn = QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
-
         save_btn = QPushButton("保存")
         save_btn.clicked.connect(self.save_region)
         button_layout.addWidget(save_btn)
-
-        layout.addLayout(button_layout)
+        form_layout.addItem(button_layout)
+        control_group.setLayout(form_layout)
+        layout.addWidget(control_group)
 
         self.setLayout(layout)
 
@@ -141,9 +138,9 @@ class RegionEditorDialog(QDialog):
         # 绘制区域框
         painter = QPainter(scaled_pixmap)
 
-        # 绘制虚线框（已有区域，带旋转）
-        x = int(self.region.get("pos", {})[0] * scaled_w)
-        y = int(self.region.get("pos", {})[1] * scaled_h)
+        # 居中对齐：pos为中心点，size为宽高
+        cx = int(self.region.get("pos", {})[0] * scaled_w)
+        cy = int(self.region.get("pos", {})[1] * scaled_h)
         rw = int(self.region.get("size", {})[0] * scaled_w)
         rh = int(self.region.get("size", {})[1] * scaled_h)
         rotation = self.region.get("r", 0)
@@ -153,30 +150,26 @@ class RegionEditorDialog(QDialog):
         painter.setPen(pen)
 
         if rotation != 0:
-            # 绘制旋转后的矩形
-            self.draw_rotated_rect(painter, x, y, rw, rh, rotation)
+            self.draw_rotated_rect_center(painter, cx, cy, rw, rh, rotation)
         else:
-            # 绘制普通矩形
-            painter.drawRect(x, y, rw, rh)
+            painter.drawRect(cx - rw // 2, cy - rh // 2, rw, rh)
 
         # 绘制实线框（用户框选区域或拖拽区域）
         if hasattr(self, "user_region") and self.user_region:
-            ux, uy, uw, uh = self.user_region
-            ux = int(ux * scaled_w)
-            uy = int(uy * scaled_h)
-            uw = int(uw * scaled_w)
-            uh = int(uh * scaled_h)
+            ucx, ucy, urw, urh = self.user_region
+            ucx = int(ucx * scaled_w)
+            ucy = int(ucy * scaled_h)
+            urw = int(urw * scaled_w)
+            urh = int(urh * scaled_h)
             pen.setStyle(Qt.PenStyle.SolidLine)
             pen.setColor(QColor("#f44336"))
             pen.setWidth(3)
             painter.setPen(pen)
 
             if rotation != 0:
-                # 绘制旋转后的矩形
-                self.draw_rotated_rect(painter, ux, uy, uw, uh, rotation)
+                self.draw_rotated_rect_center(painter, ucx, ucy, urw, urh, rotation)
             else:
-                # 绘制普通矩形
-                painter.drawRect(ux, uy, uw, uh)
+                painter.drawRect(ucx - urw // 2, ucy - urh // 2, urw, urh)
         elif self.image_label.is_dragging and self.image_label.start_pos and self.image_label.current_pos:
             # 绘制拖拽框
             start = self.image_label.start_pos
@@ -192,43 +185,35 @@ class RegionEditorDialog(QDialog):
 
             rw = max(0, x2 - x1)
             rh = max(0, y2 - y1)
+            cx = (x1 + x2) // 2 - offset_x
+            cy = (y1 + y2) // 2 - offset_y
 
             if rw > 0 and rh > 0:
                 pen.setStyle(Qt.PenStyle.SolidLine)
                 pen.setColor(QColor("#4CAF50"))
                 pen.setWidth(2)
                 painter.setPen(pen)
-                painter.drawRect(x1 - offset_x, y1 - offset_y, rw, rh)
+                painter.drawRect(cx - rw // 2, cy - rh // 2, rw, rh)
 
         painter.end()
 
         self.image_label.setPixmap(scaled_pixmap)
 
-    def draw_rotated_rect(self, painter, x, y, w, h, angle):
-        """绘制旋转的矩形"""
+    def draw_rotated_rect_center(self, painter, cx, cy, w, h, angle):
+        """以中心点绘制旋转的矩形"""
         import math
 
-        # 将角度转换为弧度
         angle_rad = math.radians(angle)
-
-        # 矩形的中心点
-        center_x = x + w / 2
-        center_y = y + h / 2
-
-        # 计算旋转后的四个角点
         cos_a = math.cos(angle_rad)
         sin_a = math.sin(angle_rad)
 
-        # 相对于中心的四个角点（未旋转）
+        # 四个角点相对于中心
         corners = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
-
-        # 旋转并平移回实际位置
         polygon_points = []
-        for cx, cy in corners:
-            rx = cx * cos_a - cy * sin_a + center_x
-            ry = cx * sin_a + cy * cos_a + center_y
+        for dx, dy in corners:
+            rx = dx * cos_a - dy * sin_a + cx
+            ry = dx * sin_a + dy * cos_a + cy
             polygon_points.append(QPointF(rx, ry))
-
         painter.drawPolygon(QPolygonF(polygon_points))
 
     def on_image_click(self, event):
@@ -285,26 +270,24 @@ class RegionEditorDialog(QDialog):
             rw = max(0, x2 - x1)
             rh = max(0, y2 - y1)
 
-            # 转换为缩放图坐标
-            scaled_x = x1 - offset_x
-            scaled_y = y1 - offset_y
-            scaled_w_region = rw
-            scaled_h_region = rh
+            # 居中对齐：计算中心点
+            cx = (x1 + x2) / 2 - offset_x
+            cy = (y1 + y2) / 2 - offset_y
 
             # 转换为百分比
-            x = max(0, min(1, (scaled_x / scaled_w)))
-            y = max(0, min(1, (scaled_y / scaled_h)))
-            region_w_percent = max(0.01, min(0.5, (scaled_w_region / scaled_w)))
-            region_h_percent = max(0.01, min(0.5, (scaled_h_region / scaled_h)))
+            cx_percent = max(0, min(1, cx / scaled_w))
+            cy_percent = max(0, min(1, cy / scaled_h))
+            region_w_percent = max(0.01, min(0.5, (rw / scaled_w)))
+            region_h_percent = max(0.01, min(0.5, (rh / scaled_h)))
 
             # 更新用户框选区域
-            self.user_region = (x, y, region_w_percent, region_h_percent)
+            self.user_region = (cx_percent, cy_percent, region_w_percent, region_h_percent)
 
             # 更新配置区域
-            self.region["x"] = x
-            self.region["y"] = y
-            self.region["w"] = region_w_percent
-            self.region["h"] = region_h_percent
+            self.region["pos"] = [cx_percent, cy_percent]
+            self.region["size"] = [region_w_percent, region_h_percent]
+            self.x_spin.setValue(cx_percent)
+            self.y_spin.setValue(cy_percent)
             self.width_spin.setValue(region_w_percent)
             self.height_spin.setValue(region_h_percent)
 
@@ -319,16 +302,19 @@ class RegionEditorDialog(QDialog):
 
     def on_region_changed(self):
         """区域尺寸改变"""
-        self.region["w"] = self.width_spin.value()
-        self.region["h"] = self.height_spin.value()
+        self.region["size"] = [self.width_spin.value(), self.height_spin.value()]
+        self.region["pos"] = [self.x_spin.value(), self.y_spin.value()]
         self.update_preview()
 
     def reset_region(self):
         """重置区域"""
         self.region = self.get_current_region()
-        self.rotation_slider.setValue(int(self.region["r"]))
-        self.width_spin.setValue(self.region["w"])
-        self.height_spin.setValue(self.region["h"])
+        if hasattr(self, "rotation_slider") and "r" in self.region:
+            self.rotation_slider.setValue(int(self.region["r"]))
+        self.x_spin.setValue(self.region.get("pos", [0, 0])[0])
+        self.y_spin.setValue(self.region.get("pos", [0, 0])[1])
+        self.width_spin.setValue(self.region.get("size", [0, 0])[0])
+        self.height_spin.setValue(self.region.get("size", [0, 0])[1])
         if hasattr(self, "user_region"):
             del self.user_region
         self.update_preview()
@@ -337,8 +323,8 @@ class RegionEditorDialog(QDialog):
         """保存区域"""
         # 转换为配置文件格式 {"pos": [x, y], "size": [w, h], "r": rotation}
         region_dict = {
-            "pos": [round(self.region["x"], 2), round(self.region["y"], 2)],
-            "size": [round(self.region["w"], 2), round(self.region["h"], 2)],
+            "pos": [round(self.region["pos"][0], 3), round(self.region["pos"][1], 3)],
+            "size": [round(self.region["size"][0], 3), round(self.region["size"][1], 3)],
         }
         if "r" in self.region:
             region_dict["r"] = round(self.region["r"], 2)
